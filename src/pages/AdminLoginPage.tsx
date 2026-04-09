@@ -12,7 +12,12 @@ export default function AdminLoginPage() {
   const handleLogin = async () => {
     setLoading(true);
     setError("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    // Normalize email to lowercase before submitting
+    const normalizedEmail = email.trim().toLowerCase();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
     if (error) {
       setError("Invalid email or password. Please try again.");
     } else {
@@ -29,7 +34,7 @@ export default function AdminLoginPage() {
             <span className="text-white text-2xl">⚽</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Legit Boys FA</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Admin Portal Staff Only</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Admin Portal · Staff Only</p>
         </div>
 
         <div className="space-y-4">
@@ -40,7 +45,7 @@ export default function AdminLoginPage() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value.toLowerCase())}
               placeholder="admin@legitboysfa.com"
               className="w-full px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-green-500"
             />
@@ -68,8 +73,14 @@ export default function AdminLoginPage() {
           <button
             onClick={handleLogin}
             disabled={loading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-60"
+            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2.5 rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
           >
+            {loading && (
+              <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+              </svg>
+            )}
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </div>

@@ -13,7 +13,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Pencil, Trash2, Plus, Shuffle, User, Target, X, Search, AlertCircle } from "lucide-react";
+import { Pencil, Trash2, Plus, Shuffle, User, Target, X, Search, AlertCircle, LogOut, Loader2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+
+// ─── Spinner helper ───────────────────────────────────────────────────────────
+const Spinner = ({ className = "h-4 w-4" }: { className?: string }) => (
+  <Loader2 className={`animate-spin ${className}`} />
+);
 
 // ─── Jersey uniqueness helper ─────────────────────────────────────────────────
 function useTakenJerseys(excludeId?: string) {
@@ -29,7 +36,8 @@ const PlayerForm: React.FC<{
   player?: Player;
   onSave: (data: any) => void;
   onCancel: () => void;
-}> = ({ player, onSave, onCancel }) => {
+  saving?: boolean;
+}> = ({ player, onSave, onCancel, saving }) => {
   const takenJerseys = useTakenJerseys(player?.id);
   const [form, setForm] = useState({
     name: player?.name || "",
@@ -44,6 +52,7 @@ const PlayerForm: React.FC<{
   const [uploading, setUploading] = useState(false);
 
   const jerseyTaken = form.jersey_number > 0 && takenJerseys.has(form.jersey_number);
+  const isBusy = uploading || !!saving;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -153,10 +162,11 @@ const PlayerForm: React.FC<{
       </div>
 
       <div className="flex gap-2 pt-2">
-        <Button onClick={handleSubmit} disabled={uploading || jerseyTaken}>
-          {uploading ? "Uploading..." : player ? "Update Player" : "Add Player"}
+        <Button onClick={handleSubmit} disabled={isBusy || jerseyTaken}>
+          {isBusy && <Spinner className="h-4 w-4 mr-2" />}
+          {uploading ? "Uploading..." : isBusy ? "Saving..." : player ? "Update Player" : "Add Player"}
         </Button>
-        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button variant="outline" onClick={onCancel} disabled={isBusy}>Cancel</Button>
       </div>
     </div>
   );
@@ -166,6 +176,7 @@ const PlayerForm: React.FC<{
 const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }> = ({ player, onClose }) => {
   const [goals, setGoals] = useState(0);
   const [assists, setAssists] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const addStat = useAddPlayerStat();
   const deleteStat = useDeletePlayerStat();
 
@@ -176,6 +187,17 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
       toast.success("Stats logged!");
       setGoals(0); setAssists(0);
     } catch { toast.error("Failed to log stats"); }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    try {
+      await deleteStat.mutateAsync(id);
+    } catch {
+      toast.error("Failed");
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const grouped = player.stat_entries.reduce<Record<string, typeof player.stat_entries>>((acc, entry) => {
@@ -229,7 +251,7 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
           </div>
         </div>
         <Button size="sm" onClick={handleAdd} disabled={addStat.isPending}>
-          <Target className="h-3 w-3 mr-1" />
+          {addStat.isPending ? <Spinner className="h-3 w-3 mr-1" /> : <Target className="h-3 w-3 mr-1" />}
           {addStat.isPending ? "Saving..." : "Save Entry"}
         </Button>
       </div>
@@ -252,9 +274,16 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
                       {new Date(entry.recorded_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                     </span>
                     <span className="font-medium">{entry.goals}G · {entry.assists}A</span>
-                    <Button variant="ghost" size="icon" className="h-6 w-6"
-                      onClick={() => deleteStat.mutateAsync(entry.id).catch(() => toast.error("Failed"))}>
-                      <Trash2 className="h-3 w-3 text-destructive" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      disabled={deletingId === entry.id}
+                      onClick={() => handleDelete(entry.id)}
+                    >
+                      {deletingId === entry.id
+                        ? <Spinner className="h-3 w-3" />
+                        : <Trash2 className="h-3 w-3 text-destructive" />}
                     </Button>
                   </div>
                 ))}
@@ -268,7 +297,12 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
 };
 
 // ─── Match Form ───────────────────────────────────────────────────────────────
-const MatchForm: React.FC<{ match?: Match; onSave: (data: any) => void; onCancel: () => void }> = ({ match, onSave, onCancel }) => {
+const MatchForm: React.FC<{
+  match?: Match;
+  onSave: (data: any) => void;
+  onCancel: () => void;
+  saving?: boolean;
+}> = ({ match, onSave, onCancel, saving }) => {
   const [form, setForm] = useState({
     date: match?.date || new Date().toISOString().split("T")[0],
     time: match?.time || "15:00",
@@ -301,8 +335,11 @@ const MatchForm: React.FC<{ match?: Match; onSave: (data: any) => void; onCancel
         </div>
       </div>
       <div className="flex gap-2">
-        <Button onClick={() => onSave(form)}>{match ? "Update Match" : "Add Match"}</Button>
-        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button onClick={() => onSave(form)} disabled={!!saving}>
+          {saving && <Spinner className="h-4 w-4 mr-2" />}
+          {saving ? "Saving..." : match ? "Update Match" : "Add Match"}
+        </Button>
+        <Button variant="outline" onClick={onCancel} disabled={!!saving}>Cancel</Button>
       </div>
     </div>
   );
@@ -311,6 +348,7 @@ const MatchForm: React.FC<{ match?: Match; onSave: (data: any) => void; onCancel
 // ─── Admin Page ───────────────────────────────────────────────────────────────
 const AdminPage: React.FC = () => {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const { data: players } = usePlayers();
   const { data: playersWithStats } = usePlayersWithStats();
   const { data: matches } = useMatches();
@@ -330,6 +368,11 @@ const AdminPage: React.FC = () => {
   const [playerSearch, setPlayerSearch] = useState("");
   const [trainingNames, setTrainingNames] = useState("");
   const [teamSize, setTeamSize] = useState(5);
+  const [deletingPlayerId, setDeletingPlayerId] = useState<string | null>(null);
+  const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
+  const [savingPlayer, setSavingPlayer] = useState(false);
+  const [savingMatch, setSavingMatch] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const filteredPlayers = useMemo(() =>
     (players ?? []).filter((p) =>
@@ -338,6 +381,7 @@ const AdminPage: React.FC = () => {
     ), [players, playerSearch]);
 
   const handleSavePlayer = async (data: any) => {
+    setSavingPlayer(true);
     try {
       if (editingPlayer) {
         await updatePlayer.mutateAsync({ id: editingPlayer.id, ...data });
@@ -348,15 +392,19 @@ const AdminPage: React.FC = () => {
       }
       setShowPlayerForm(false); setEditingPlayer(null);
     } catch { toast.error("Failed to save player"); }
+    finally { setSavingPlayer(false); }
   };
 
   const handleDeletePlayer = async (id: string) => {
     if (!confirm("Delete this player? Their stats will also be removed.")) return;
+    setDeletingPlayerId(id);
     try { await deletePlayer.mutateAsync(id); toast.success("Player deleted"); }
     catch { toast.error("Failed to delete"); }
+    finally { setDeletingPlayerId(null); }
   };
 
   const handleSaveMatch = async (data: any) => {
+    setSavingMatch(true);
     try {
       if (editingMatch) {
         await updateMatch.mutateAsync({ id: editingMatch.id, ...data });
@@ -367,12 +415,15 @@ const AdminPage: React.FC = () => {
       }
       setShowMatchForm(false); setEditingMatch(null);
     } catch { toast.error("Failed to save match"); }
+    finally { setSavingMatch(false); }
   };
 
   const handleDeleteMatch = async (id: string) => {
     if (!confirm("Delete this match?")) return;
+    setDeletingMatchId(id);
     try { await deleteMatch.mutateAsync(id); toast.success("Match deleted"); }
     catch { toast.error("Failed to delete"); }
+    finally { setDeletingMatchId(null); }
   };
 
   const handleShuffle = async () => {
@@ -385,9 +436,14 @@ const AdminPage: React.FC = () => {
     } catch { toast.error("Failed to create teams"); }
   };
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await supabase.auth.signOut();
+    navigate("/");
+  };
+
   const activeStatPlayer = playersWithStats?.find((p) => p.id === statPlayerId) ?? null;
 
-  // Match result helper
   const getResult = (m: Match) => {
     if (m.team_score > m.opponent_score) return { label: "W", cls: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400" };
     if (m.team_score < m.opponent_score) return { label: "L", cls: "bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400" };
@@ -396,9 +452,22 @@ const AdminPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-12">
-      <h1 className="text-4xl font-heading font-bold text-foreground text-center mb-10">
-        {t("admin.title")}
-      </h1>
+      {/* Header with logout */}
+      <div className="flex items-center justify-between max-w-4xl mx-auto mb-10">
+        <h1 className="text-4xl font-heading font-bold text-foreground text-center flex-1">
+          {t("admin.title")}
+        </h1>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="flex items-center gap-2 flex-shrink-0"
+        >
+          {loggingOut ? <Spinner className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
+          {loggingOut ? "Signing out..." : "Logout"}
+        </Button>
+      </div>
 
       <Tabs defaultValue="players" className="max-w-4xl mx-auto">
         <TabsList className="grid w-full grid-cols-4">
@@ -432,6 +501,7 @@ const AdminPage: React.FC = () => {
               player={editingPlayer || undefined}
               onSave={handleSavePlayer}
               onCancel={() => { setShowPlayerForm(false); setEditingPlayer(null); }}
+              saving={savingPlayer}
             />
           )}
 
@@ -452,11 +522,23 @@ const AdminPage: React.FC = () => {
                   <span className="text-muted-foreground text-sm ml-2">{p.position} · {p.strong_foot === "L" ? "Left" : "Right"}</span>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="icon" onClick={() => { setEditingPlayer(p); setShowPlayerForm(true); }}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={!!deletingPlayerId}
+                    onClick={() => { setEditingPlayer(p); setShowPlayerForm(true); }}
+                  >
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDeletePlayer(p.id)}>
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={deletingPlayerId === p.id}
+                    onClick={() => handleDeletePlayer(p.id)}
+                  >
+                    {deletingPlayerId === p.id
+                      ? <Spinner className="h-4 w-4" />
+                      : <Trash2 className="h-4 w-4 text-destructive" />}
                   </Button>
                 </div>
               </div>
@@ -476,6 +558,7 @@ const AdminPage: React.FC = () => {
               match={editingMatch || undefined}
               onSave={handleSaveMatch}
               onCancel={() => { setShowMatchForm(false); setEditingMatch(null); }}
+              saving={savingMatch}
             />
           )}
           <div className="space-y-2">
@@ -491,11 +574,23 @@ const AdminPage: React.FC = () => {
                     <span className="text-muted-foreground text-sm ml-2">{m.date}{m.time ? ` · ${m.time}` : ""}</span>
                   </div>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => { setEditingMatch(m); setShowMatchForm(true); }}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={!!deletingMatchId}
+                      onClick={() => { setEditingMatch(m); setShowMatchForm(true); }}
+                    >
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteMatch(m.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={deletingMatchId === m.id}
+                      onClick={() => handleDeleteMatch(m.id)}
+                    >
+                      {deletingMatchId === m.id
+                        ? <Spinner className="h-4 w-4" />
+                        : <Trash2 className="h-4 w-4 text-destructive" />}
                     </Button>
                   </div>
                 </div>
@@ -523,8 +618,10 @@ const AdminPage: React.FC = () => {
               </thead>
               <tbody>
                 {playersWithStats?.map((p, i) => (
-                  <tr key={p.id}
-                    className={`border-t border-border ${i % 2 === 0 ? "bg-card" : "bg-muted/20"} ${statPlayerId === p.id ? "bg-primary/5" : ""}`}>
+                  <tr
+                    key={p.id}
+                    className={`border-t border-border ${i % 2 === 0 ? "bg-card" : "bg-muted/20"} ${statPlayerId === p.id ? "bg-primary/5" : ""}`}
+                  >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
@@ -543,8 +640,12 @@ const AdminPage: React.FC = () => {
                     <td className="px-4 py-3 text-center font-heading font-black text-primary">{p.goals_total}</td>
                     <td className="px-4 py-3 text-center font-heading font-black text-primary">{p.assists_total}</td>
                     <td className="px-4 py-3 text-center">
-                      <Button variant={statPlayerId === p.id ? "default" : "outline"} size="sm" className="h-7 text-xs"
-                        onClick={() => setStatPlayerId(statPlayerId === p.id ? null : p.id)}>
+                      <Button
+                        variant={statPlayerId === p.id ? "default" : "outline"}
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setStatPlayerId(statPlayerId === p.id ? null : p.id)}
+                      >
                         {statPlayerId === p.id ? "Close" : "+ Log"}
                       </Button>
                     </td>
@@ -561,11 +662,15 @@ const AdminPage: React.FC = () => {
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label>Player Names (one per line)</Label>
-                <Button variant="ghost" size="sm" className="text-xs h-7"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs h-7"
                   onClick={() => {
                     if (!players?.length) return;
                     setTrainingNames(players.map((p) => p.name).join("\n"));
-                  }}>
+                  }}
+                >
                   Import from roster
                 </Button>
               </div>
@@ -592,10 +697,14 @@ const AdminPage: React.FC = () => {
             </div>
             <div className="flex gap-2">
               <Button onClick={handleShuffle} disabled={createSession.isPending}>
-                <Shuffle className="h-4 w-4 mr-1" />
+                {createSession.isPending
+                  ? <Spinner className="h-4 w-4 mr-1" />
+                  : <Shuffle className="h-4 w-4 mr-1" />}
                 {createSession.isPending ? "Shuffling..." : "Shuffle Teams"}
               </Button>
-              <Button variant="outline" onClick={() => setTrainingNames("")}>Clear</Button>
+              <Button variant="outline" onClick={() => setTrainingNames("")} disabled={createSession.isPending}>
+                Clear
+              </Button>
             </div>
           </div>
         </TabsContent>
