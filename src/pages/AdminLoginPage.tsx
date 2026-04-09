@@ -24,7 +24,6 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
       <div className="bg-white dark:bg-gray-800 p-8 rounded-2xl shadow-lg w-full max-w-md">
-        {/* Logo + Title */}
         <div className="flex flex-col items-center mb-8">
           <div className="w-14 h-14 bg-green-600 rounded-full flex items-center justify-center mb-3">
             <span className="text-white text-2xl">⚽</span>
@@ -33,7 +32,6 @@ export default function AdminLoginPage() {
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Admin Portal — Staff Only</p>
         </div>
 
-        {/* Form */}
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

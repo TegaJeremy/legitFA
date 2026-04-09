@@ -5,77 +5,68 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── LIGHT MODE (default) ──────────────────────────────────────────────── */
   :root {
-    --background: 120 10% 97%;
-    --foreground: 150 30% 8%;
-    --card: 0 0% 100%;
-    --card-foreground: 150 30% 8%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 150 30% 8%;
-    --primary: 145 63% 32%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 43 96% 56%;
-    --secondary-foreground: 150 30% 8%;
-    --muted: 120 10% 93%;
-    --muted-foreground: 150 10% 40%;
-    --accent: 145 40% 90%;
-    --accent-foreground: 145 63% 25%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 120 10% 88%;
-    --input: 120 10% 88%;
-    --ring: 145 63% 32%;
-    --radius: 0.75rem;
-    --sidebar-background: 150 20% 96%;
-    --sidebar-foreground: 150 30% 8%;
-    --sidebar-primary: 145 63% 32%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 145 40% 90%;
-    --sidebar-accent-foreground: 145 63% 25%;
-    --sidebar-border: 120 10% 88%;
-    --sidebar-ring: 145 63% 32%;
+    --background: 0 0% 100%;           /* pure white */
+    --foreground: 0 0% 6%;             /* near-black #0f0f0f */
 
-    --pitch: 140 60% 28%;
-    --pitch-light: 140 50% 42%;
-    --gold: 43 96% 56%;
-    --gold-dark: 38 80% 40%;
-    --surface-elevated: 0 0% 100%;
+    --card: 0 0% 97%;                  /* very light grey for card surfaces */
+    --card-foreground: 0 0% 6%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 6%;
+
+    --primary: 38 52% 54%;             /* gold #C9A84C */
+    --primary-foreground: 0 0% 6%;     /* dark text on gold buttons */
+
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 6%;
+
+    --muted: 0 0% 93%;                 /* light grey for muted backgrounds */
+    --muted-foreground: 0 0% 42%;      /* medium grey text */
+
+    --accent: 38 52% 54%;
+    --accent-foreground: 0 0% 6%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 88%;                /* light border */
+    --input: 0 0% 88%;
+    --ring: 38 52% 54%;                /* gold focus ring */
+
+    --radius: 0rem;                    /* sharp corners throughout */
   }
 
+  /* ── DARK MODE ─────────────────────────────────────────────────────────── */
   .dark {
-    --background: 150 30% 6%;
-    --foreground: 120 10% 93%;
-    --card: 150 25% 10%;
-    --card-foreground: 120 10% 93%;
-    --popover: 150 25% 10%;
-    --popover-foreground: 120 10% 93%;
-    --primary: 145 63% 42%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 43 96% 56%;
-    --secondary-foreground: 150 30% 8%;
-    --muted: 150 20% 15%;
-    --muted-foreground: 120 10% 60%;
-    --accent: 145 30% 18%;
-    --accent-foreground: 145 50% 70%;
-    --destructive: 0 62% 30%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 150 15% 18%;
-    --input: 150 15% 18%;
-    --ring: 145 63% 42%;
-    --sidebar-background: 150 25% 8%;
-    --sidebar-foreground: 120 10% 93%;
-    --sidebar-primary: 145 63% 42%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 145 30% 18%;
-    --sidebar-accent-foreground: 145 50% 70%;
-    --sidebar-border: 150 15% 18%;
-    --sidebar-ring: 145 63% 42%;
+    --background: 0 0% 4%;            /* #0a0a0a obsidian */
+    --foreground: 0 0% 94%;
 
-    --pitch: 140 50% 20%;
-    --pitch-light: 140 40% 30%;
-    --gold: 43 96% 56%;
-    --gold-dark: 38 80% 45%;
-    --surface-elevated: 150 20% 12%;
+    --card: 0 0% 7%;                   /* #111111 */
+    --card-foreground: 0 0% 94%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 94%;
+
+    --primary: 38 52% 54%;             /* same gold */
+    --primary-foreground: 0 0% 6%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 90%;
+
+    --muted: 0 0% 11%;
+    --muted-foreground: 0 0% 50%;
+
+    --accent: 38 52% 54%;
+    --accent-foreground: 0 0% 6%;
+
+    --destructive: 0 62% 40%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 0 0% 14%;                /* subtle dark border */
+    --input: 0 0% 14%;
+    --ring: 38 52% 54%;
   }
 }
 
@@ -83,22 +74,39 @@
   * {
     @apply border-border;
   }
+
   body {
-    @apply bg-background text-foreground font-body antialiased;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', sans-serif;
   }
+
   h1, h2, h3, h4, h5, h6 {
-    @apply font-heading font-bold tracking-tight;
+    font-family: 'Montserrat', sans-serif;
+    @apply font-bold tracking-tight;
   }
 }
 
 @layer utilities {
+  /* Gold text gradient */
   .text-gradient-gold {
-    @apply bg-clip-text text-transparent bg-gradient-to-r from-secondary to-[hsl(var(--gold-dark))];
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #C9A84C 0%, #e8c96a 50%, #B8922A 100%);
   }
-  .bg-pitch-gradient {
-    background: linear-gradient(135deg, hsl(var(--pitch)) 0%, hsl(var(--pitch-light)) 100%);
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
   }
-  .bg-hero-overlay {
-    background: linear-gradient(180deg, hsla(var(--pitch), 0.85) 0%, hsla(var(--pitch), 0.6) 50%, hsla(var(--pitch), 0.9) 100%);
-  }
+
+  /* Custom scrollbar — dark mode */
+  .dark ::-webkit-scrollbar { width: 6px; }
+  .dark ::-webkit-scrollbar-track { background: #0a0a0a; }
+  .dark ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 3px; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #C9A84C; }
+
+  /* Custom scrollbar — light mode */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #f5f5f5; }
+  ::-webkit-scrollbar-thumb { background: #d0d0d0; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #C9A84C; }
 }

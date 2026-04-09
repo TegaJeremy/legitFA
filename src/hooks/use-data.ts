@@ -1,6 +1,10 @@
+// src/hooks/use-data.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
 
 type Player = Database["public"]["Tables"]["players"]["Row"];
 type Match = Database["public"]["Tables"]["matches"]["Row"];
@@ -8,7 +12,6 @@ type TrainingTeam = Database["public"]["Tables"]["training_teams"]["Row"];
 
 export type { Player, Match, TrainingTeam };
 
-// ─── player_stats row type (not in generated types yet, so we define it) ─────
 export interface PlayerStatEntry {
   id: string;
   player_id: string;
@@ -17,7 +20,6 @@ export interface PlayerStatEntry {
   recorded_at: string;
 }
 
-// ─── Derived stat shape used across pages ────────────────────────────────────
 export interface PlayerWithStats extends Player {
   goals_total: number;
   assists_total: number;
@@ -26,7 +28,6 @@ export interface PlayerWithStats extends Player {
   stat_entries: PlayerStatEntry[];
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 function isSameMonth(dateStr: string) {
   const d = new Date(dateStr);
   const now = new Date();
@@ -38,17 +39,13 @@ export function mergeStats(players: Player[], stats: PlayerStatEntry[]): PlayerW
     const entries = stats.filter((s) => s.player_id === p.id);
     const goals_total = entries.reduce((sum, s) => sum + s.goals, 0);
     const assists_total = entries.reduce((sum, s) => sum + s.assists, 0);
-    const goals_this_month = entries
-      .filter((s) => isSameMonth(s.recorded_at))
-      .reduce((sum, s) => sum + s.goals, 0);
-    const assists_this_month = entries
-      .filter((s) => isSameMonth(s.recorded_at))
-      .reduce((sum, s) => sum + s.assists, 0);
+    const goals_this_month = entries.filter((s) => isSameMonth(s.recorded_at)).reduce((sum, s) => sum + s.goals, 0);
+    const assists_this_month = entries.filter((s) => isSameMonth(s.recorded_at)).reduce((sum, s) => sum + s.assists, 0);
     return { ...p, goals_total, assists_total, goals_this_month, assists_this_month, stat_entries: entries };
   });
 }
 
-// ─── Queries ──────────────────────────────────────────────────────────────────
+// ─── Players ──────────────────────────────────────────────────────────────────
 
 export const usePlayers = () =>
   useQuery({
@@ -64,50 +61,20 @@ export const usePlayerStats = () =>
   useQuery({
     queryKey: ["player_stats"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("player_stats")
-        .select("*")
-        .order("recorded_at", { ascending: false });
+      const { data, error } = await db.from("player_stats").select("*").order("recorded_at", { ascending: false });
       if (error) throw error;
       return data as PlayerStatEntry[];
     },
   });
 
-/** Combined hook — returns players enriched with computed stats */
 export const usePlayersWithStats = () => {
   const players = usePlayers();
   const stats = usePlayerStats();
   return {
     isLoading: players.isLoading || stats.isLoading,
-    data:
-      players.data && stats.data
-        ? mergeStats(players.data, stats.data)
-        : undefined,
+    data: players.data && stats.data ? mergeStats(players.data, stats.data) : undefined,
   };
 };
-
-export const useMatches = () =>
-  useQuery({
-    queryKey: ["matches"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("matches").select("*").order("date", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-  });
-
-export const useTrainingTeams = () =>
-  useQuery({
-    queryKey: ["training_teams"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("training_teams").select("*").order("team_number");
-      if (error) throw error;
-      return data;
-    },
-    refetchInterval: 30000,
-  });
-
-// ─── Player mutations ─────────────────────────────────────────────────────────
 
 export const useAddPlayer = () => {
   const qc = useQueryClient();
@@ -144,27 +111,13 @@ export const useDeletePlayer = () => {
   });
 };
 
-// ─── Stat mutations ───────────────────────────────────────────────────────────
-
 export const useAddPlayerStat = () => {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({
-      player_id,
-      goals,
-      assists,
-    }: {
-      player_id: string;
-      goals: number;
-      assists: number;
-    }) => {
-      const { data, error } = await supabase
-        .from("player_stats")
-        .insert({ player_id, goals, assists })
-        .select()
-        .single();
+    mutationFn: async ({ player_id, goals, assists }: { player_id: string; goals: number; assists: number }) => {
+      const { data, error } = await db.from("player_stats").insert({ player_id, goals, assists }).select().single();
       if (error) throw error;
-      return data;
+      return data as PlayerStatEntry;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["player_stats"] }),
   });
@@ -174,14 +127,24 @@ export const useDeletePlayerStat = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("player_stats").delete().eq("id", id);
+      const { error } = await db.from("player_stats").delete().eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["player_stats"] }),
   });
 };
 
-// ─── Match mutations ──────────────────────────────────────────────────────────
+// ─── Matches ──────────────────────────────────────────────────────────────────
+
+export const useMatches = () =>
+  useQuery({
+    queryKey: ["matches"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("matches").select("*").order("date", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
 
 export const useAddMatch = () => {
   const qc = useQueryClient();
@@ -217,6 +180,19 @@ export const useDeleteMatch = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["matches"] }),
   });
 };
+
+// ─── Training ─────────────────────────────────────────────────────────────────
+
+export const useTrainingTeams = () =>
+  useQuery({
+    queryKey: ["training_teams"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("training_teams").select("*").order("team_number");
+      if (error) throw error;
+      return data;
+    },
+    refetchInterval: 30000,
+  });
 
 export const useCreateTrainingSession = () => {
   const qc = useQueryClient();

@@ -15,19 +15,21 @@ import StatsPage from "@/pages/StatsPage";
 import TrainingPage from "@/pages/TrainingPage";
 import AdminPage from "@/pages/AdminPage";
 import AdminLoginPage from "@/pages/AdminLoginPage";
+import SuperAdminPage from "@/pages/SuperAdminPage";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
 
-// Hides Navbar/Footer on the admin login page
+const HIDE_CHROME = ["/admin/login", "/admin", "/admin/super"];
+
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
-  const isLoginPage = location.pathname === "/admin/login";
+  const hideChrome = HIDE_CHROME.some((p) => location.pathname.startsWith(p));
   return (
     <div className="min-h-screen flex flex-col">
-      {!isLoginPage && <Navbar />}
+      {!hideChrome && <Navbar />}
       <main className="flex-1">{children}</main>
-      {!isLoginPage && <Footer />}
+      {!hideChrome && <Footer />}
     </div>
   );
 };
@@ -42,12 +44,17 @@ const App = () => (
           <BrowserRouter>
             <Layout>
               <Routes>
+                {/* Public routes */}
                 <Route path="/" element={<LandingPage />} />
                 <Route path="/team" element={<TeamPage />} />
                 <Route path="/matches" element={<MatchesPage />} />
                 <Route path="/stats" element={<StatsPage />} />
                 <Route path="/training" element={<TrainingPage />} />
+
+                {/* Auth */}
                 <Route path="/admin/login" element={<AdminLoginPage />} />
+
+                {/* Admin — any active admin */}
                 <Route
                   path="/admin"
                   element={
@@ -56,6 +63,17 @@ const App = () => (
                     </AdminGuard>
                   }
                 />
+
+                {/* Super admin only */}
+                <Route
+                  path="/admin/super"
+                  element={
+                    <AdminGuard requireSuperAdmin>
+                      <SuperAdminPage />
+                    </AdminGuard>
+                  }
+                />
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Layout>

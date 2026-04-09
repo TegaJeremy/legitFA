@@ -2,42 +2,59 @@ import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
-const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
+interface AdminGuardProps {
+  children: React.ReactNode;
+  requireSuperAdmin?: boolean;
+}
+
+const AdminGuard: React.FC<AdminGuardProps> = ({ children, requireSuperAdmin = false }) => {
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
-  useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+  const checkUser = async () => {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
 
-      
-      if (user && user.user_metadata?.role === "admin") {
-        setAuthenticated(true);
-      } else {
+      if (!user) {
         setAuthenticated(false);
+        return;
       }
 
-      setLoading(false);
-    };
+      const { data: adminRecord } = await db
+        .from("admin_users")
+        .select("role, is_active")
+        .eq("id", user.id)
+        .single();
 
-    
+      if (adminRecord && adminRecord.is_active) {
+        setAuthenticated(true);
+        setIsSuperAdmin(adminRecord.role === "super_admin");
+      } else {
+        setAuthenticated(false);
+        setIsSuperAdmin(false);
+      }
+    } catch {
+      setAuthenticated(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     checkUser();
 
-    
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       checkUser();
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
-  // Loading spinner
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -46,12 +63,9 @@ const AdminGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     );
   }
 
-  
-  if (!authenticated) {
-    return <Navigate to="/admin/login" replace />;
-  }
+  if (!authenticated) return <Navigate to="/admin/login" replace />;
+  if (requireSuperAdmin && !isSuperAdmin) return <Navigate to="/admin" replace />;
 
-  
   return <>{children}</>;
 };
 

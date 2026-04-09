@@ -1,7 +1,7 @@
 import React from "react";
 import { useI18n } from "@/lib/i18n";
 import { Link } from "react-router-dom";
-import { MapPin, Mail, Phone, Calendar, Trophy, Instagram, Twitter, Facebook } from "lucide-react";
+import { MapPin, Mail, Phone, Clock, Trophy, Instagram, Twitter, Facebook, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const Footer: React.FC = () => {
@@ -9,45 +9,49 @@ const Footer: React.FC = () => {
 
   return (
     <footer className="bg-card border-t border-border">
-      <div className="container mx-auto px-4 py-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+      <div className="container mx-auto px-4 pt-16 pb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
 
-          {/* Brand */}
+          {/* ── Brand ── */}
           <div className="lg:col-span-1">
-            <h3 className="font-heading text-2xl font-black text-foreground mb-3">Legit Boys FA</h3>
-            <p className="text-muted-foreground text-sm leading-relaxed mb-6">{t("footer.tagline")}</p>
-            <div className="flex gap-3">
-              {[
-                { Icon: Instagram, href: "#" },
-                { Icon: Twitter, href: "#" },
-                { Icon: Facebook, href: "#" },
-              ].map(({ Icon, href }, i) => (
-                <a
-                  key={i}
-                  href={href}
-                  className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-primary-foreground transition-colors"
-                >
-                  <Icon className="h-4 w-4" />
+            {/* Logo mark */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 bg-primary flex items-center justify-center shrink-0">
+                <Trophy className="h-4 w-4 text-primary-foreground" />
+              </div>
+              <span className="font-black text-xl text-foreground" style={{ fontFamily: "Georgia, serif" }}>
+                Legit Boys FA
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-1 pl-11">Ajegunle, Lagos · Est. 2019</p>
+            <p className="text-muted-foreground text-sm leading-relaxed mb-6 mt-4">
+              {t("footer.tagline")}
+            </p>
+            {/* Social icons */}
+            <div className="flex gap-2">
+              {[Instagram, Twitter, Facebook].map((Icon, i) => (
+                <a key={i} href="#"
+                  className="w-9 h-9 border border-border flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                  <Icon className="h-3.5 w-3.5" />
                 </a>
               ))}
             </div>
           </div>
 
-          {/* Quick Links */}
+          {/* ── Quick Links ── */}
           <div>
-            <h4 className="font-heading font-bold text-foreground text-sm uppercase tracking-wider mb-4">Quick Links</h4>
-            <ul className="space-y-2.5">
+            <h4 className="text-foreground font-bold text-[10px] uppercase tracking-[0.2em] mb-5">Quick Links</h4>
+            <ul className="space-y-3">
               {[
-                { to: "/team", label: "Our Squad" },
-                { to: "/matches", label: "Fixtures & Results" },
-                { to: "/stats", label: "Statistics" },
-                { to: "/training", label: "Training" },
+                { to: "/team",     label: "Our Squad" },
+                { to: "/matches",  label: "Fixtures & Results" },
+                { to: "/stats",    label: "Statistics" },
+                { to: "/training", label: "Training Info" },
               ].map((l) => (
                 <li key={l.to}>
-                  <Link
-                    to={l.to}
-                    className="text-muted-foreground text-sm hover:text-primary transition-colors"
-                  >
+                  <Link to={l.to}
+                    className="text-muted-foreground text-sm hover:text-primary transition-colors inline-flex items-center gap-1 group">
+                    <ArrowRight className="h-3 w-3 opacity-0 group-hover:opacity-100 -ml-4 group-hover:ml-0 transition-all text-primary" />
                     {l.label}
                   </Link>
                 </li>
@@ -55,53 +59,67 @@ const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Location & Schedule */}
+          {/* ── Schedule ── */}
           <div>
-            <h4 className="font-heading font-bold text-foreground text-sm uppercase tracking-wider mb-4">Location</h4>
-            <div className="space-y-3 text-muted-foreground text-sm">
-              <div className="flex items-start gap-2.5">
-                <MapPin className="h-4 w-4 mt-0.5 text-primary shrink-0" />
-                <span>{t("hero.location")}</span>
+            <h4 className="text-foreground font-bold text-[10px] uppercase tracking-[0.2em] mb-5">Schedule</h4>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3">
+                <Clock className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-foreground text-sm font-bold">Training</p>
+                  <p className="text-muted-foreground text-xs">Every Saturday · 4:00 PM</p>
+                  <p className="text-muted-foreground text-xs">Arrive by 3:45 PM</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2.5">
-                <Calendar className="h-4 w-4 text-primary shrink-0" />
-                <span>Training: Tue &amp; Thu, 7 PM</span>
+              <div className="flex items-start gap-3">
+                <Trophy className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-foreground text-sm font-bold">Matches</p>
+                  <p className="text-muted-foreground text-xs">Any day — fixtures posted weekly</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2.5">
-                <Trophy className="h-4 w-4 text-primary shrink-0" />
-                <span>Matches: Saturdays, 3 PM</span>
+              <div className="flex items-start gap-3">
+                <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-foreground text-sm font-bold">Location</p>
+                  <p className="text-muted-foreground text-xs">{t("hero.location")}</p>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Contact + Newsletter */}
+          {/* ── Contact + Newsletter ── */}
           <div>
-            <h4 className="font-heading font-bold text-foreground text-sm uppercase tracking-wider mb-4">Contact Us</h4>
-            <div className="space-y-3 text-muted-foreground text-sm mb-6">
-              <a
-                href="mailto:info@legitboysfa.com"
-                className="flex items-center gap-2.5 hover:text-primary transition-colors"
-              >
+            <h4 className="text-foreground font-bold text-[10px] uppercase tracking-[0.2em] mb-5">Contact Us</h4>
+            <div className="space-y-3 mb-7">
+              <a href="mailto:info@legitboysfa.com"
+                className="flex items-center gap-2.5 text-muted-foreground text-sm hover:text-primary transition-colors">
                 <Mail className="h-4 w-4 text-primary shrink-0" />
-                <span>info@legitboysfa.com</span>
+                info@legitboysfa.com
               </a>
-              <a
-                href="tel:+000000000"
-                className="flex items-center gap-2.5 hover:text-primary transition-colors"
-              >
-                <Phone className="h-4 w-4 text-primary shrink-0" />
-                <span>+000 000 0000</span>
-              </a>
+              {[
+                { href: "tel:+2348081825445",  label: "0808 182 5445" },
+                { href: "tel:+2349071726550",  label: "+234 907 172 6550" },
+                { href: "tel:+2347082824209",  label: "+234 708 282 4209" },
+              ].map(({ href, label }) => (
+                <a key={href} href={href}
+                  className="flex items-center gap-2.5 text-muted-foreground text-sm hover:text-primary transition-colors">
+                  <Phone className="h-4 w-4 text-primary shrink-0" />
+                  {label}
+                </a>
+              ))}
             </div>
 
-            <p className="text-xs font-heading font-bold text-foreground mb-2 uppercase tracking-wider">Newsletter</p>
-            <div className="flex gap-2">
+            {/* Newsletter */}
+            <p className="text-foreground font-bold text-[10px] uppercase tracking-[0.2em] mb-3">Newsletter</p>
+            <div className="flex gap-1.5">
               <input
                 type="email"
                 placeholder="Your email"
-                className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="flex-1 bg-background border border-border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary rounded-none"
               />
-              <Button size="sm" className="bg-primary text-primary-foreground shrink-0 font-heading font-bold">
+              <Button size="sm"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0 font-bold rounded-none px-4">
                 Go
               </Button>
             </div>
@@ -109,10 +127,11 @@ const Footer: React.FC = () => {
         </div>
       </div>
 
+      {/* Bottom bar */}
       <div className="border-t border-border py-5">
         <div className="container mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-muted-foreground/60">
           <span>© {new Date().getFullYear()} Legit Boys Football Academy. All rights reserved.</span>
-          <span>Built with ❤️ for the beautiful game</span>
+          <span>Built with ❤️ for the beautiful game · Lagos, Nigeria</span>
         </div>
       </div>
     </footer>
