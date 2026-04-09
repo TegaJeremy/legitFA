@@ -31,12 +31,12 @@ const slides = [
   { img: TeamA,   tag: "Season 2024 / 25", headline: "Legit Boys\nFootball Academy", sub: "Where Lagos builds its next generation of football talent." },
   { img: gallery1, tag: "Training",          headline: "Train Hard.\nWin Together.",    sub: "Structured elite coaching every Saturday at 4 PM." },
   { img: gallery2, tag: "Matchday",          headline: "Every Game\nTells a Story.",    sub: "Competitive fixtures that sharpen players for the next level." },
-  { img: gallery3, tag: "Brotherhood",       headline: "More Than\nA Football Club.",   sub: "Family, discipline, community — built on the beautiful game." },
-  { img: Jeremy, tag: "Brotherhood",       headline: "More Than\nA Football Club.",   sub: "Family, discipline, community — built on the beautiful game." },
-  { img: TeamB, tag: "Brotherhood",       headline: "More Than\nA Football Club.",   sub: "Family, discipline, community — built on the beautiful game." },
+  { img: gallery3, tag: "Brotherhood",       headline: "More Than\nA Football Club.",   sub: "Family, discipline, community built on the beautiful game." },
+  { img: Jeremy, tag: "Brotherhood",       headline: "More Than\nA Football Club.",   sub: "Family, discipline, community built on the beautiful game." },
+  { img: TeamB, tag: "Brotherhood",       headline: "More Than\nA Football Club.",   sub: "Family, discipline, community built on the beautiful game." },
 ];
 
-// ─── Hero — always dark (photo overlay), unaffected by theme ─────────────────
+// ─── Hero always dark (photo overlay), unaffected by theme ─────────────────
 const HeroSection: React.FC = () => {
   const { t } = useI18n();
   const [current, setCurrent] = useState(0);
@@ -240,7 +240,7 @@ const AboutSection: React.FC = () => {
             </h2>
             <p className="text-muted-foreground text-base leading-relaxed mb-4">{t("about.text")}</p>
             <p className="text-muted-foreground text-base leading-relaxed mb-10">
-              From casual kickabouts to organized competitive football — Legit Boys FA is the home for serious players across Lagos who want to grow, compete, and belong.
+              From casual kickabouts to organized competitive football Legit Boys FA is the home for serious players across Lagos who want to grow, compete, and belong.
             </p>
             <Link
               to="/team"
@@ -307,12 +307,12 @@ const NextMatchSection: React.FC = () => {
 
 // ─── Features ─────────────────────────────────────────────────────────────────
 const features = [
-  { icon: Trophy,  title: "Winning Culture",    desc: "A squad mentality forged over 6 seasons — we don't just play, we compete for every result." },
-  { icon: Zap,     title: "Elite Training",      desc: "Structured Saturday sessions at 4 PM — technique, fitness, and tactical shape every week." },
+  { icon: Trophy,  title: "Winning Culture",    desc: "A squad mentality forged over 6 seasons we don't just play, we compete for every result." },
+  { icon: Zap,     title: "Elite Training",      desc: "Structured Saturday sessions at 4 PM technique, fitness, and tactical shape every week." },
   { icon: Shield,  title: "Brotherhood",         desc: "Events, socials, and a community of brothers that extends well beyond the 90 minutes." },
   { icon: Target,  title: "Stat Tracking",       desc: "Individual goals and assists tracked every month so every player can see their growth." },
   { icon: Star,    title: "Player Development",  desc: "Personal feedback from coaches and data-driven improvement plans per player." },
-  { icon: Clock,   title: "Consistent Fixtures", desc: "Regular competitive matches year-round — no off-season, only improvement." },
+  { icon: Clock,   title: "Consistent Fixtures", desc: "Regular competitive matches year-round no off-season, only improvement." },
 ];
 
 const FeaturesSection: React.FC = () => {
@@ -432,7 +432,7 @@ const TopScorersSection: React.FC = () => {
   );
 };
 
-// ─── Gallery — always has dark overlay on images ──────────────────────────────
+// ─── Gallery always has dark overlay on images ──────────────────────────────
 const GallerySection: React.FC = () => {
   const { t } = useI18n();
   const ref = useRef(null);
@@ -507,15 +507,15 @@ const TrainingSection: React.FC = () => {
               <div className="w-1 h-14 bg-primary" />
               <div>
                 <p className="text-foreground font-bold text-2xl">4:00 PM</p>
-                <p className="text-muted-foreground text-sm">Kickoff — arrive by 3:45</p>
+                <p className="text-muted-foreground text-sm">Kickoff arrive by 3:45</p>
               </div>
             </div>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              Structured sessions covering tactical shape, technical drills, and competitive small-sided games. All skill levels welcome — serious commitment required.
+              Structured sessions covering tactical shape, technical drills, and competitive small-sided games. All skill levels welcome serious commitment required.
             </p>
           </motion.div>
 
-          {/* Gold contact card — always gold regardless of theme */}
+          {/* Gold contact card always gold regardless of theme */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -623,7 +623,7 @@ const JoinSection: React.FC = () => {
             Ready to Play<br />with the Best?
           </h2>
           <p className="text-muted-foreground text-base mb-12 max-w-lg mx-auto leading-relaxed">
-            Trials are open year-round. Whether you're a seasoned player or just getting started — there's a place for you at Legit Boys FA.
+            Trials are open year-round. Whether you're a seasoned player or just getting started there's a place for you at Legit Boys FA.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild size="lg"

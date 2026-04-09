@@ -47,7 +47,7 @@ const PlayerCard: React.FC<{ player: Player; index: number }> = ({ player, index
         </div>
       )}
 
-      {/* Jersey number — bottom right overlay */}
+      {/* Jersey number bottom right overlay */}
       <div className="absolute bottom-0 right-0 bg-red-600 text-white font-black text-3xl leading-none px-3 py-2"
         style={{ fontFamily: "Georgia, serif" }}>
         {player.jersey_number}

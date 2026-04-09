@@ -54,7 +54,7 @@ const App = () => (
                 {/* Auth */}
                 <Route path="/admin/login" element={<AdminLoginPage />} />
 
-                {/* Admin — any active admin */}
+                {/* Admin any active admin */}
                 <Route
                   path="/admin"
                   element={

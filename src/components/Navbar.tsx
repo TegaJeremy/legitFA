@@ -13,7 +13,7 @@ const Navbar: React.FC = () => {
   const [langOpen, setLangOpen] = useState(false);
   const location = useLocation();
 
-  // Admin link removed — access via /admin/login directly
+  // Admin link removed access via /admin/login directly
   const links = [
     { to: "/", label: t("nav.home") },
     { to: "/team", label: t("nav.team") },

@@ -75,7 +75,7 @@ const Footer: React.FC = () => {
                 <Trophy className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                 <div>
                   <p className="text-foreground text-sm font-bold">Matches</p>
-                  <p className="text-muted-foreground text-xs">Any day — fixtures posted weekly</p>
+                  <p className="text-muted-foreground text-xs">Any day fixtures posted weekly</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">

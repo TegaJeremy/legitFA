@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState } from "react";
 
 export type Language = "en" | "yo" | "ig" | "ur" | "fr" | "ar" | "ha" | "pcm" | "ef";
-// Removed Latin (irrelevant) — Added Hausa (ha) and Nigerian Pidgin (pcm)
+// Removed Latin (irrelevant) Added Hausa (ha) and Nigerian Pidgin (pcm)
 
 const translations: Record<string, Record<Language, string>> = {
   "nav.home": {
@@ -187,6 +187,7 @@ const translations: Record<string, Record<Language, string>> = {
     en: "Loading...", yo: "Ń gbéwọlé...", ig: "Na-ebu...", ur: "Ń gbéwọlé...",
     fr: "Chargement...", ar: "جار التحميل...", ha: "Ana lodawa...", pcm: "E dey load...", ef: "Ọfiọn...",
   },
+   
 };
 
 type I18nContextType = {
