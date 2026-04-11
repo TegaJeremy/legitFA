@@ -183,34 +183,82 @@ export const useDeleteMatch = () => {
 
 // ─── Training ─────────────────────────────────────────────────────────────────
 
-export const useTrainingTeams = () =>
-  useQuery({
+export function useTrainingTeams() {
+  return useQuery({
     queryKey: ["training_teams"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("training_teams").select("*").order("team_number");
+      const now = new Date().toISOString();
+      const { data, error } = await supabase
+        .from("training_teams")
+        .select("*")
+        .gt("expires_at", now)          // only rows whose expiry is in the future
+        .order("team_number", { ascending: true });
       if (error) throw error;
-      return data;
+      return data ?? [];
     },
-    refetchInterval: 30000,
+    refetchInterval: 60_000, // re-check every minute so expired rows disappear automatically
   });
+}
 
-export const useCreateTrainingSession = () => {
-  const qc = useQueryClient();
+export function useCreateTrainingSession() {
+  const queryClient = useQueryClient();
+ 
   return useMutation({
-    mutationFn: async ({ players, teamSize }: { players: string[]; teamSize: number }) => {
+    mutationFn: async ({
+      players,
+      teamSize,
+    }: {
+      players: string[];
+      teamSize: number;
+    }) => {
+      // ── Step 1: wipe all existing rows ──────────────────────────────────
+      const { error: clearError } = await supabase
+        .from("training_teams")
+        .delete()
+        .not("id", "is", null);
+      if (clearError) throw clearError;
+ 
+      // ── Step 2: shuffle the names randomly ──────────────────────────────
       const shuffled = [...players].sort(() => Math.random() - 0.5);
+ 
+      // ── Step 3: build rows ───────────────────────────────────────────────
       const sessionId = crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString();
-      const teams = shuffled.map((name, i) => ({
+      const expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(); // +5 hrs
+ 
+      const rows = shuffled.map((name, idx) => ({
         player_name: name,
-        team_number: Math.floor(i / teamSize) + 1,
-        session_id: sessionId,
-        expires_at: expiresAt,
+        team_number: Math.floor(idx / teamSize) + 1,
+        session_id:  sessionId,
+        expires_at:  expiresAt,
       }));
-      const { error } = await supabase.from("training_teams").insert(teams);
-      if (error) throw error;
-      return teams;
+ 
+      // ── Step 4: insert new rows ──────────────────────────────────────────
+      const { error: insertError } = await supabase
+        .from("training_teams")
+        .insert(rows);
+      if (insertError) throw insertError;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["training_teams"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["training_teams"] });
+    },
   });
-};
+}
+
+export function useClearTrainingSession() {
+  const queryClient = useQueryClient();
+ 
+  return useMutation({
+    mutationFn: async () => {
+      // Delete ALL rows (no WHERE clause needed — we always want a full wipe)
+      const { error } = await supabase
+        .from("training_teams")
+        .delete()
+        .not("id", "is", null); // this condition is always true → deletes everything
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      // Invalidate so every component using useTrainingTeams re-fetches immediately
+      queryClient.invalidateQueries({ queryKey: ["training_teams"] });
+    },
+  });
+}

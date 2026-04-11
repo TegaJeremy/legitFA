@@ -3,38 +3,48 @@ import { useI18n } from "@/lib/i18n";
 import {
   usePlayers, useAddPlayer, useUpdatePlayer, useDeletePlayer,
   useMatches, useAddMatch, useUpdateMatch, useDeleteMatch,
-  useCreateTrainingSession, usePlayersWithStats, useAddPlayerStat,
-  useDeletePlayerStat,
+  useCreateTrainingSession, useClearTrainingSession, useTrainingTeams,
+  usePlayersWithStats, useAddPlayerStat, useDeletePlayerStat,
   type Player, type Match, type PlayerWithStats,
 } from "@/hooks/use-data";
+import type { Database } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Pencil, Trash2, Plus, Shuffle, User, Target, X, Search, AlertCircle, LogOut, Loader2 } from "lucide-react";
+import {
+  Pencil, Trash2, Plus, Shuffle, User, Target, X,
+  Search, AlertCircle, LogOut, Loader2, Eraser, Users, Clock,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { formatDistanceToNow } from "date-fns";
 
-// ─── Spinner helper ───────────────────────────────────────────────────────────
+// ─── Shared form data types ───────────────────────────────────────────────────
+type PlayerFormData = Database["public"]["Tables"]["players"]["Insert"];
+type MatchFormData  = Database["public"]["Tables"]["matches"]["Insert"];
+type MatchFormState = MatchFormData & { venue?: string };
+
+// ─── Spinner ──────────────────────────────────────────────────────────────────
 const Spinner = ({ className = "h-4 w-4" }: { className?: string }) => (
   <Loader2 className={`animate-spin ${className}`} />
 );
 
-// ─── Jersey uniqueness helper ─────────────────────────────────────────────────
+// ─── Jersey uniqueness ────────────────────────────────────────────────────────
 function useTakenJerseys(excludeId?: string) {
   const { data: players } = usePlayers();
   return useMemo(
     () => new Set((players ?? []).filter((p) => p.id !== excludeId).map((p) => p.jersey_number)),
-    [players, excludeId]
+    [players, excludeId],
   );
 }
 
 // ─── Player Form ──────────────────────────────────────────────────────────────
 const PlayerForm: React.FC<{
   player?: Player;
-  onSave: (data: any) => void;
+  onSave: (data: PlayerFormData) => void;
   onCancel: () => void;
   saving?: boolean;
 }> = ({ player, onSave, onCancel, saving }) => {
@@ -45,7 +55,7 @@ const PlayerForm: React.FC<{
     jersey_number: player?.jersey_number ?? 0,
     strong_foot: player?.strong_foot || "R",
     state: player?.state || "",
-    nationality: (player as any)?.nationality || "",
+    nationality: (player as Player & { nationality?: string })?.nationality || "",
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(player?.avatar_url || null);
@@ -63,16 +73,16 @@ const PlayerForm: React.FC<{
   const uploadImage = async (): Promise<string | null> => {
     if (!imageFile) return null;
     setUploading(true);
-    const formData = new FormData();
-    formData.append("file", imageFile);
-    formData.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+    const fd = new FormData();
+    fd.append("file", imageFile);
+    fd.append("upload_preset", import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
     try {
       const res = await fetch(
         `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
-        { method: "POST", body: formData }
+        { method: "POST", body: fd },
       );
       const data = await res.json();
-      return data.secure_url ?? null;
+      return (data.secure_url as string) ?? null;
     } catch { return null; }
     finally { setUploading(false); }
   };
@@ -80,12 +90,11 @@ const PlayerForm: React.FC<{
   const handleSubmit = async () => {
     if (!form.name.trim()) { toast.error("Name is required"); return; }
     if (jerseyTaken) { toast.error(`Jersey #${form.jersey_number} is already taken`); return; }
-
     let avatar_url = player?.avatar_url || "";
     if (imageFile) {
-      const uploaded = await uploadImage();
-      if (!uploaded) { toast.error("Image upload failed"); return; }
-      avatar_url = uploaded;
+      const up = await uploadImage();
+      if (!up) { toast.error("Image upload failed"); return; }
+      avatar_url = up;
     }
     onSave({ ...form, avatar_url });
   };
@@ -97,15 +106,11 @@ const PlayerForm: React.FC<{
           <img src={preview} alt="Preview" className="w-24 h-24 rounded-full object-cover border-2 border-border" />
         </div>
       )}
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <Label>Name</Label>
-          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        </div>
+        <div><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
         <div>
           <Label>Position</Label>
-          <Select value={form.position} onValueChange={(v) => setForm({ ...form, position: v })}>
+          <Select value={form.position ?? "Midfielder"} onValueChange={(v) => setForm({ ...form, position: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {["Goalkeeper", "Defender", "Midfielder", "Attacker"].map((p) => (
@@ -114,12 +119,11 @@ const PlayerForm: React.FC<{
             </SelectContent>
           </Select>
         </div>
-
         <div>
           <Label>Jersey #</Label>
           <Input
             type="number"
-            value={form.jersey_number}
+            value={form.jersey_number ?? 0}
             onChange={(e) => setForm({ ...form, jersey_number: Math.max(0, +e.target.value) })}
             className={jerseyTaken ? "border-destructive focus-visible:ring-destructive" : ""}
           />
@@ -129,10 +133,9 @@ const PlayerForm: React.FC<{
             </p>
           )}
         </div>
-
         <div>
           <Label>Strong Foot</Label>
-          <Select value={form.strong_foot} onValueChange={(v) => setForm({ ...form, strong_foot: v })}>
+          <Select value={form.strong_foot ?? "R"} onValueChange={(v) => setForm({ ...form, strong_foot: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="R">Right</SelectItem>
@@ -140,27 +143,16 @@ const PlayerForm: React.FC<{
             </SelectContent>
           </Select>
         </div>
-
-        <div>
-          <Label>State of Origin</Label>
-          <Input value={form.state ?? ""} onChange={(e) => setForm({ ...form, state: e.target.value })} />
-        </div>
-
+        <div><Label>State of Origin</Label><Input value={form.state ?? ""} onChange={(e) => setForm({ ...form, state: e.target.value })} /></div>
         <div>
           <Label>Nationality</Label>
-          <Input
-            value={form.nationality}
-            placeholder="e.g. Nigerian"
-            onChange={(e) => setForm({ ...form, nationality: e.target.value })}
-          />
+          <Input value={form.nationality ?? ""} placeholder="e.g. Nigerian" onChange={(e) => setForm({ ...form, nationality: e.target.value })} />
         </div>
-
         <div className="sm:col-span-2">
           <Label>Player Photo</Label>
           <Input type="file" accept="image/*" onChange={handleFileChange} />
         </div>
       </div>
-
       <div className="flex gap-2 pt-2">
         <Button onClick={handleSubmit} disabled={isBusy || jerseyTaken}>
           {isBusy && <Spinner className="h-4 w-4 mr-2" />}
@@ -191,13 +183,9 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
-    try {
-      await deleteStat.mutateAsync(id);
-    } catch {
-      toast.error("Failed");
-    } finally {
-      setDeletingId(null);
-    }
+    try { await deleteStat.mutateAsync(id); }
+    catch { toast.error("Failed"); }
+    finally { setDeletingId(null); }
   };
 
   const grouped = player.stat_entries.reduce<Record<string, typeof player.stat_entries>>((acc, entry) => {
@@ -212,9 +200,9 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0 flex items-center justify-center">
-            {player.avatar_url ? (
-              <img src={player.avatar_url} alt={player.name} className="w-full h-full object-cover" />
-            ) : <User className="h-5 w-5 text-muted-foreground" />}
+            {player.avatar_url
+              ? <img src={player.avatar_url} alt={player.name} className="w-full h-full object-cover" />
+              : <User className="h-5 w-5 text-muted-foreground" />}
           </div>
           <div>
             <p className="font-heading font-bold text-foreground">{player.name}</p>
@@ -223,7 +211,6 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
         </div>
         <Button variant="ghost" size="icon" onClick={onClose}><X className="h-4 w-4" /></Button>
       </div>
-
       <div className="grid grid-cols-4 gap-2 text-center">
         {[
           { val: player.goals_this_month, label: "Mo. Goals", primary: true },
@@ -237,25 +224,17 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
           </div>
         ))}
       </div>
-
       <div className="border border-border rounded-lg p-4 space-y-3">
         <p className="text-sm font-semibold text-foreground">Log New Entry (today)</p>
         <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs">Goals</Label>
-            <Input type="number" min={0} value={goals} onChange={(e) => setGoals(Math.max(0, +e.target.value))} />
-          </div>
-          <div>
-            <Label className="text-xs">Assists</Label>
-            <Input type="number" min={0} value={assists} onChange={(e) => setAssists(Math.max(0, +e.target.value))} />
-          </div>
+          <div><Label className="text-xs">Goals</Label><Input type="number" min={0} value={goals} onChange={(e) => setGoals(Math.max(0, +e.target.value))} /></div>
+          <div><Label className="text-xs">Assists</Label><Input type="number" min={0} value={assists} onChange={(e) => setAssists(Math.max(0, +e.target.value))} /></div>
         </div>
         <Button size="sm" onClick={handleAdd} disabled={addStat.isPending}>
           {addStat.isPending ? <Spinner className="h-3 w-3 mr-1" /> : <Target className="h-3 w-3 mr-1" />}
           {addStat.isPending ? "Saving..." : "Save Entry"}
         </Button>
       </div>
-
       {Object.keys(grouped).length > 0 && (
         <div className="space-y-3 max-h-60 overflow-y-auto pr-1">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">History</p>
@@ -274,16 +253,10 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
                       {new Date(entry.recorded_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
                     </span>
                     <span className="font-medium">{entry.goals}G · {entry.assists}A</span>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
+                    <Button variant="ghost" size="icon" className="h-6 w-6"
                       disabled={deletingId === entry.id}
-                      onClick={() => handleDelete(entry.id)}
-                    >
-                      {deletingId === entry.id
-                        ? <Spinner className="h-3 w-3" />
-                        : <Trash2 className="h-3 w-3 text-destructive" />}
+                      onClick={() => handleDelete(entry.id)}>
+                      {deletingId === entry.id ? <Spinner className="h-3 w-3" /> : <Trash2 className="h-3 w-3 text-destructive" />}
                     </Button>
                   </div>
                 ))}
@@ -299,28 +272,28 @@ const StatEntryPanel: React.FC<{ player: PlayerWithStats; onClose: () => void }>
 // ─── Match Form ───────────────────────────────────────────────────────────────
 const MatchForm: React.FC<{
   match?: Match;
-  onSave: (data: any) => void;
+  onSave: (data: MatchFormData) => void;
   onCancel: () => void;
   saving?: boolean;
 }> = ({ match, onSave, onCancel, saving }) => {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<MatchFormState>({
     date: match?.date || new Date().toISOString().split("T")[0],
     time: match?.time || "15:00",
     opponent: match?.opponent || "",
     team_score: match?.team_score ?? 0,
     opponent_score: match?.opponent_score ?? 0,
-    venue: (match as any)?.venue || "Home",
+    venue: (match as Match & { venue?: string })?.venue || "Home",
   });
 
   return (
     <div className="bg-card border border-border rounded-xl p-6 space-y-4">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div><Label>Date</Label><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
-        <div><Label>Time</Label><Input type="time" value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} /></div>
-        <div><Label>Opponent</Label><Input value={form.opponent} onChange={(e) => setForm({ ...form, opponent: e.target.value })} /></div>
+        <div><Label>Date</Label><Input type="date" value={form.date ?? ""} onChange={(e) => setForm({ ...form, date: e.target.value })} /></div>
+        <div><Label>Time</Label><Input type="time" value={form.time ?? ""} onChange={(e) => setForm({ ...form, time: e.target.value })} /></div>
+        <div><Label>Opponent</Label><Input value={form.opponent ?? ""} onChange={(e) => setForm({ ...form, opponent: e.target.value })} /></div>
         <div>
           <Label>Venue</Label>
-          <Select value={form.venue} onValueChange={(v) => setForm({ ...form, venue: v })}>
+          <Select value={form.venue ?? "Home"} onValueChange={(v) => setForm({ ...form, venue: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="Home">Home</SelectItem>
@@ -330,16 +303,179 @@ const MatchForm: React.FC<{
           </Select>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <div><Label>Our Score</Label><Input type="number" value={form.team_score} onChange={(e) => setForm({ ...form, team_score: +e.target.value })} /></div>
-          <div><Label>Opp Score</Label><Input type="number" value={form.opponent_score} onChange={(e) => setForm({ ...form, opponent_score: +e.target.value })} /></div>
+          <div><Label>Our Score</Label><Input type="number" value={form.team_score ?? 0} onChange={(e) => setForm({ ...form, team_score: +e.target.value })} /></div>
+          <div><Label>Opp Score</Label><Input type="number" value={form.opponent_score ?? 0} onChange={(e) => setForm({ ...form, opponent_score: +e.target.value })} /></div>
         </div>
       </div>
       <div className="flex gap-2">
-        <Button onClick={() => onSave(form)} disabled={!!saving}>
+        <Button
+          onClick={() => {
+            const { venue: _v, ...rest } = form;
+            onSave(rest);
+          }}
+          disabled={!!saving}
+        >
           {saving && <Spinner className="h-4 w-4 mr-2" />}
           {saving ? "Saving..." : match ? "Update Match" : "Add Match"}
         </Button>
         <Button variant="outline" onClick={onCancel} disabled={!!saving}>Cancel</Button>
+      </div>
+    </div>
+  );
+};
+
+// ─── Shuffle Tab ──────────────────────────────────────────────────────────────
+const ShuffleTab: React.FC<{ players: Player[] | undefined }> = ({ players }) => {
+  const [trainingNames, setTrainingNames] = useState("");
+  const [teamSize, setTeamSize] = useState(5);
+  const createSession = useCreateTrainingSession();
+  const clearSession = useClearTrainingSession();
+  const { data: activeTeams } = useTrainingTeams();
+
+  const grouped = useMemo(() =>
+    (activeTeams ?? []).reduce<Record<number, string[]>>((acc, t) => {
+      if (!acc[t.team_number]) acc[t.team_number] = [];
+      acc[t.team_number].push(t.player_name);
+      return acc;
+    }, {}),
+    [activeTeams],
+  );
+
+  const teamNumbers = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+  const hasActiveSession = teamNumbers.length > 0;
+  const expiresAt = activeTeams?.[0]?.expires_at;
+
+  const accentColors = [
+    { border: "border-l-green-500",  text: "text-green-600 dark:text-green-400"  },
+    { border: "border-l-blue-500",   text: "text-blue-600 dark:text-blue-400"    },
+    { border: "border-l-orange-500", text: "text-orange-600 dark:text-orange-400"},
+    { border: "border-l-purple-500", text: "text-purple-600 dark:text-purple-400"},
+    { border: "border-l-red-500",    text: "text-red-600 dark:text-red-400"      },
+  ];
+
+  const handleShuffle = async () => {
+    const names = trainingNames.split("\n").map((n) => n.trim()).filter(Boolean);
+    if (names.length < 2) { toast.error("Enter at least 2 players"); return; }
+    try {
+      await createSession.mutateAsync({ players: names, teamSize });
+      toast.success("Teams shuffled!");
+      setTrainingNames("");
+    } catch { toast.error("Failed to create teams"); }
+  };
+
+  const handleClear = async () => {
+    if (!confirm("Clear the current training session? The Training page will show nothing until the next shuffle.")) return;
+    try {
+      await clearSession.mutateAsync();
+      toast.success("Session cleared!");
+    } catch { toast.error("Failed to clear session"); }
+  };
+
+  return (
+    <div className="space-y-5">
+      {hasActiveSession && (
+        <div className="bg-card border border-border rounded-xl overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-muted/30 border-b border-border">
+            <div className="flex items-center gap-2 min-w-0">
+              <Users className="h-4 w-4 text-primary flex-shrink-0" />
+              <span className="font-semibold text-sm text-foreground">Active Session</span>
+              {expiresAt && (
+                <span className="text-xs text-muted-foreground hidden sm:flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  expires {formatDistanceToNow(new Date(expiresAt), { addSuffix: true })}
+                </span>
+              )}
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              className="h-8 text-xs gap-1.5 flex-shrink-0"
+              onClick={handleClear}
+              disabled={clearSession.isPending}
+            >
+              {clearSession.isPending ? <Spinner className="h-3 w-3" /> : <Eraser className="h-3 w-3" />}
+              {clearSession.isPending ? "Clearing..." : "Clear Teams"}
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4">
+            {teamNumbers.map((num, i) => {
+              const accent = accentColors[i % accentColors.length];
+              return (
+                <div key={num} className={`bg-muted/30 rounded-lg p-3 border-l-4 ${accent.border}`}>
+                  <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${accent.text}`}>
+                    Team {num} · {grouped[num].length}p
+                  </p>
+                  <ul className="space-y-0.5">
+                    {grouped[num].map((name) => (
+                      <li key={name} className="text-xs text-foreground truncate">{name}</li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="bg-card border border-border rounded-xl p-6 space-y-4">
+        <div className="flex items-center gap-2">
+          <Shuffle className="h-4 w-4 text-primary" />
+          <h3 className="font-semibold text-sm text-foreground">
+            {hasActiveSession ? "Reshuffle Teams" : "Create Teams"}
+          </h3>
+          {hasActiveSession && (
+            <span className="text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300 px-2 py-0.5 rounded-full">
+              Replaces current session
+            </span>
+          )}
+        </div>
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label>Player Names (one per line)</Label>
+            <Button
+              variant="ghost" size="sm" className="text-xs h-7"
+              onClick={() => {
+                if (!players?.length) return;
+                setTrainingNames(players.map((p) => p.name).join("\n"));
+              }}
+            >
+              Import from roster
+            </Button>
+          </div>
+          <textarea
+            className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[150px] focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+            value={trainingNames}
+            onChange={(e) => setTrainingNames(e.target.value)}
+            placeholder={"Player 1\nPlayer 2\nPlayer 3\n..."}
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            {trainingNames.split("\n").filter((n) => n.trim()).length} players entered
+          </p>
+        </div>
+        <div>
+          <Label>Team Size</Label>
+          <Select value={String(teamSize)} onValueChange={(v) => setTeamSize(+v)}>
+            <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[3, 4, 5, 6, 7, 8, 11].map((n) => (
+                <SelectItem key={n} value={String(n)}>{n} players</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={handleShuffle} disabled={createSession.isPending || clearSession.isPending}>
+            {createSession.isPending
+              ? <Spinner className="h-4 w-4 mr-1" />
+              : <Shuffle className="h-4 w-4 mr-1" />}
+            {createSession.isPending
+              ? "Shuffling..."
+              : hasActiveSession ? "Reshuffle" : "Shuffle Teams"}
+          </Button>
+          <Button variant="outline" onClick={() => setTrainingNames("")} disabled={createSession.isPending}>
+            Clear Input
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -358,7 +494,6 @@ const AdminPage: React.FC = () => {
   const addMatch = useAddMatch();
   const updateMatch = useUpdateMatch();
   const deleteMatch = useDeleteMatch();
-  const createSession = useCreateTrainingSession();
 
   const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
   const [showPlayerForm, setShowPlayerForm] = useState(false);
@@ -366,8 +501,6 @@ const AdminPage: React.FC = () => {
   const [showMatchForm, setShowMatchForm] = useState(false);
   const [statPlayerId, setStatPlayerId] = useState<string | null>(null);
   const [playerSearch, setPlayerSearch] = useState("");
-  const [trainingNames, setTrainingNames] = useState("");
-  const [teamSize, setTeamSize] = useState(5);
   const [deletingPlayerId, setDeletingPlayerId] = useState<string | null>(null);
   const [deletingMatchId, setDeletingMatchId] = useState<string | null>(null);
   const [savingPlayer, setSavingPlayer] = useState(false);
@@ -377,10 +510,10 @@ const AdminPage: React.FC = () => {
   const filteredPlayers = useMemo(() =>
     (players ?? []).filter((p) =>
       p.name.toLowerCase().includes(playerSearch.toLowerCase()) ||
-      String(p.jersey_number).includes(playerSearch)
+      String(p.jersey_number).includes(playerSearch),
     ), [players, playerSearch]);
 
-  const handleSavePlayer = async (data: any) => {
+  const handleSavePlayer = async (data: PlayerFormData) => {
     setSavingPlayer(true);
     try {
       if (editingPlayer) {
@@ -403,7 +536,7 @@ const AdminPage: React.FC = () => {
     finally { setDeletingPlayerId(null); }
   };
 
-  const handleSaveMatch = async (data: any) => {
+  const handleSaveMatch = async (data: MatchFormData) => {
     setSavingMatch(true);
     try {
       if (editingMatch) {
@@ -426,16 +559,6 @@ const AdminPage: React.FC = () => {
     finally { setDeletingMatchId(null); }
   };
 
-  const handleShuffle = async () => {
-    const names = trainingNames.split("\n").map((n) => n.trim()).filter(Boolean);
-    if (names.length < 2) { toast.error("Enter at least 2 players"); return; }
-    try {
-      await createSession.mutateAsync({ players: names, teamSize });
-      toast.success("Teams shuffled!");
-      setTrainingNames("");
-    } catch { toast.error("Failed to create teams"); }
-  };
-
   const handleLogout = async () => {
     setLoggingOut(true);
     await supabase.auth.signOut();
@@ -452,18 +575,12 @@ const AdminPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-12">
-      {/* Header with logout */}
       <div className="flex items-center justify-between max-w-4xl mx-auto mb-10">
         <h1 className="text-4xl font-heading font-bold text-foreground text-center flex-1">
           {t("admin.title")}
         </h1>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleLogout}
-          disabled={loggingOut}
-          className="flex items-center gap-2 flex-shrink-0"
-        >
+        <Button variant="outline" size="sm" onClick={handleLogout} disabled={loggingOut}
+          className="flex items-center gap-2 flex-shrink-0">
           {loggingOut ? <Spinner className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
           {loggingOut ? "Signing out..." : "Logout"}
         </Button>
@@ -487,15 +604,10 @@ const AdminPage: React.FC = () => {
             )}
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="Search players or jersey #..."
-                value={playerSearch}
-                onChange={(e) => setPlayerSearch(e.target.value)}
-              />
+              <Input className="pl-9" placeholder="Search players or jersey #..."
+                value={playerSearch} onChange={(e) => setPlayerSearch(e.target.value)} />
             </div>
           </div>
-
           {showPlayerForm && (
             <PlayerForm
               player={editingPlayer || undefined}
@@ -504,41 +616,29 @@ const AdminPage: React.FC = () => {
               saving={savingPlayer}
             />
           )}
-
           <div className="text-xs text-muted-foreground">
             {filteredPlayers.length} player{filteredPlayers.length !== 1 ? "s" : ""}
           </div>
-
           <div className="space-y-2">
             {filteredPlayers.map((p) => (
               <div key={p.id} className="flex items-center gap-3 bg-card border border-border rounded-lg p-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
-                  {p.avatar_url ? (
-                    <img src={p.avatar_url} alt={p.name} className="w-full h-full object-cover" />
-                  ) : <User className="h-5 w-5 text-muted-foreground" />}
+                  {p.avatar_url
+                    ? <img src={p.avatar_url} alt={p.name} className="w-full h-full object-cover" />
+                    : <User className="h-5 w-5 text-muted-foreground" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <span className="font-heading font-semibold text-foreground">#{p.jersey_number} {p.name}</span>
                   <span className="text-muted-foreground text-sm ml-2">{p.position} · {p.strong_foot === "L" ? "Left" : "Right"}</span>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    disabled={!!deletingPlayerId}
-                    onClick={() => { setEditingPlayer(p); setShowPlayerForm(true); }}
-                  >
+                  <Button variant="ghost" size="icon" disabled={!!deletingPlayerId}
+                    onClick={() => { setEditingPlayer(p); setShowPlayerForm(true); }}>
                     <Pencil className="h-4 w-4" />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    disabled={deletingPlayerId === p.id}
-                    onClick={() => handleDeletePlayer(p.id)}
-                  >
-                    {deletingPlayerId === p.id
-                      ? <Spinner className="h-4 w-4" />
-                      : <Trash2 className="h-4 w-4 text-destructive" />}
+                  <Button variant="ghost" size="icon" disabled={deletingPlayerId === p.id}
+                    onClick={() => handleDeletePlayer(p.id)}>
+                    {deletingPlayerId === p.id ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                   </Button>
                 </div>
               </div>
@@ -554,12 +654,8 @@ const AdminPage: React.FC = () => {
             </Button>
           )}
           {showMatchForm && (
-            <MatchForm
-              match={editingMatch || undefined}
-              onSave={handleSaveMatch}
-              onCancel={() => { setShowMatchForm(false); setEditingMatch(null); }}
-              saving={savingMatch}
-            />
+            <MatchForm match={editingMatch || undefined} onSave={handleSaveMatch}
+              onCancel={() => { setShowMatchForm(false); setEditingMatch(null); }} saving={savingMatch} />
           )}
           <div className="space-y-2">
             {matches?.map((m) => {
@@ -574,23 +670,13 @@ const AdminPage: React.FC = () => {
                     <span className="text-muted-foreground text-sm ml-2">{m.date}{m.time ? ` · ${m.time}` : ""}</span>
                   </div>
                   <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={!!deletingMatchId}
-                      onClick={() => { setEditingMatch(m); setShowMatchForm(true); }}
-                    >
+                    <Button variant="ghost" size="icon" disabled={!!deletingMatchId}
+                      onClick={() => { setEditingMatch(m); setShowMatchForm(true); }}>
                       <Pencil className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={deletingMatchId === m.id}
-                      onClick={() => handleDeleteMatch(m.id)}
-                    >
-                      {deletingMatchId === m.id
-                        ? <Spinner className="h-4 w-4" />
-                        : <Trash2 className="h-4 w-4 text-destructive" />}
+                    <Button variant="ghost" size="icon" disabled={deletingMatchId === m.id}
+                      onClick={() => handleDeleteMatch(m.id)}>
+                      {deletingMatchId === m.id ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4 text-destructive" />}
                     </Button>
                   </div>
                 </div>
@@ -618,10 +704,8 @@ const AdminPage: React.FC = () => {
               </thead>
               <tbody>
                 {playersWithStats?.map((p, i) => (
-                  <tr
-                    key={p.id}
-                    className={`border-t border-border ${i % 2 === 0 ? "bg-card" : "bg-muted/20"} ${statPlayerId === p.id ? "bg-primary/5" : ""}`}
-                  >
+                  <tr key={p.id}
+                    className={`border-t border-border ${i % 2 === 0 ? "bg-card" : "bg-muted/20"} ${statPlayerId === p.id ? "bg-primary/5" : ""}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0 bg-muted flex items-center justify-center">
@@ -640,12 +724,8 @@ const AdminPage: React.FC = () => {
                     <td className="px-4 py-3 text-center font-heading font-black text-primary">{p.goals_total}</td>
                     <td className="px-4 py-3 text-center font-heading font-black text-primary">{p.assists_total}</td>
                     <td className="px-4 py-3 text-center">
-                      <Button
-                        variant={statPlayerId === p.id ? "default" : "outline"}
-                        size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => setStatPlayerId(statPlayerId === p.id ? null : p.id)}
-                      >
+                      <Button variant={statPlayerId === p.id ? "default" : "outline"} size="sm" className="h-7 text-xs"
+                        onClick={() => setStatPlayerId(statPlayerId === p.id ? null : p.id)}>
                         {statPlayerId === p.id ? "Close" : "+ Log"}
                       </Button>
                     </td>
@@ -657,56 +737,8 @@ const AdminPage: React.FC = () => {
         </TabsContent>
 
         {/* ── Shuffle ── */}
-        <TabsContent value="training" className="space-y-4 mt-6">
-          <div className="bg-card border border-border rounded-xl p-6 space-y-4">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <Label>Player Names (one per line)</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-xs h-7"
-                  onClick={() => {
-                    if (!players?.length) return;
-                    setTrainingNames(players.map((p) => p.name).join("\n"));
-                  }}
-                >
-                  Import from roster
-                </Button>
-              </div>
-              <textarea
-                className="w-full mt-1 rounded-lg border border-input bg-background px-3 py-2 text-sm min-h-[150px] focus:outline-none focus:ring-2 focus:ring-ring"
-                value={trainingNames}
-                onChange={(e) => setTrainingNames(e.target.value)}
-                placeholder={"Player 1\nPlayer 2\nPlayer 3\n..."}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                {trainingNames.split("\n").filter((n) => n.trim()).length} players entered
-              </p>
-            </div>
-            <div>
-              <Label>Team Size</Label>
-              <Select value={String(teamSize)} onValueChange={(v) => setTeamSize(+v)}>
-                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {[3, 4, 5, 6, 7, 8, 11].map((n) => (
-                    <SelectItem key={n} value={String(n)}>{n} players</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={handleShuffle} disabled={createSession.isPending}>
-                {createSession.isPending
-                  ? <Spinner className="h-4 w-4 mr-1" />
-                  : <Shuffle className="h-4 w-4 mr-1" />}
-                {createSession.isPending ? "Shuffling..." : "Shuffle Teams"}
-              </Button>
-              <Button variant="outline" onClick={() => setTrainingNames("")} disabled={createSession.isPending}>
-                Clear
-              </Button>
-            </div>
-          </div>
+        <TabsContent value="training" className="mt-6">
+          <ShuffleTab players={players} />
         </TabsContent>
       </Tabs>
     </div>
