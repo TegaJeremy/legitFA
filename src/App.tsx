@@ -17,6 +17,7 @@ import AdminPage from "@/pages/AdminPage";
 import AdminLoginPage from "@/pages/AdminLoginPage";
 import SuperAdminPage from "@/pages/SuperAdminPage";
 import NotFound from "@/pages/NotFound";
+import LiveSessionPage from "@/pages/LiveSessionPage";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
                 <Route path="/matches" element={<MatchesPage />} />
                 <Route path="/stats" element={<StatsPage />} />
                 <Route path="/training" element={<TrainingPage />} />
+                <Route path="/live-session" element={<LiveSessionPage />} />
 
                 {/* Auth */}
                 <Route path="/admin/login" element={<AdminLoginPage />} />

@@ -20,6 +20,7 @@ const Navbar: React.FC = () => {
     { to: "/matches", label: t("nav.matches") },
     { to: "/stats", label: t("nav.stats") },
     { to: "/training", label: t("nav.training") },
+    { to: "/live-session", label: "Live" },
   ];
 
   return (

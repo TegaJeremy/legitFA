@@ -148,6 +148,111 @@ export type Database = {
         }
         Relationships: []
       }
+      live_session_state: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          num_teams: number
+          queue: number[]
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          num_teams: number
+          queue: number[]
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          num_teams?: number
+          queue?: number[]
+          session_id?: string
+        }
+        Relationships: []
+      }
+      live_session_teams: {
+        Row: {
+          created_at: string
+          expires_at: string
+          ga: number
+          gf: number
+          id: string
+          lost: number
+          drawn: number
+          played: number
+          points: number
+          session_id: string
+          team_number: number
+          won: number
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          ga?: number
+          gf?: number
+          id?: string
+          lost?: number
+          drawn?: number
+          played?: number
+          points?: number
+          session_id: string
+          team_number: number
+          won?: number
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          ga?: number
+          gf?: number
+          id?: string
+          lost?: number
+          drawn?: number
+          played?: number
+          points?: number
+          session_id?: string
+          team_number?: number
+          won?: number
+        }
+        Relationships: []
+      }
+      live_session_matches: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          result: string
+          session_id: string
+          team_a: number
+          team_b: number
+          match_duration?: number
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          result: string
+          session_id: string
+          team_a: number
+          team_b: number
+          match_duration?: number
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          result?: string
+          session_id?: string
+          team_a?: number
+          team_b?: number
+          match_duration?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
