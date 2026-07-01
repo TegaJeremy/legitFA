@@ -262,3 +262,145 @@ export function useClearTrainingSession() {
     },
   });
 }
+
+// ─── Seasons ──────────────────────────────────────────────────────────────────
+
+export interface Season {
+  id: string;
+  name: string;
+  status: "active" | "closed";
+  created_at: string;
+}
+
+export interface SeasonStatEntry {
+  id: string;
+  season_id: string;
+  player_id: string;
+  goals: number;
+  assists: number;
+  recorded_at: string;
+}
+
+export const useSeasons = () =>
+  useQuery({
+    queryKey: ["seasons"],
+    queryFn: async () => {
+      const { data, error } = await db.from("seasons").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as Season[];
+    },
+  });
+
+export const useActiveSeason = () =>
+  useQuery({
+    queryKey: ["active_season"],
+    queryFn: async () => {
+      const { data, error } = await db.from("seasons").select("*").eq("status", "active").limit(1).maybeSingle();
+      if (error) throw error;
+      return data as Season | null;
+    },
+  });
+
+export const useSeasonStats = (seasonId: string | undefined) =>
+  useQuery({
+    queryKey: ["season_stats", seasonId],
+    queryFn: async () => {
+      if (!seasonId) return [];
+      const { data, error } = await db.from("season_stats").select("*").eq("season_id", seasonId).order("recorded_at", { ascending: false });
+      if (error) throw error;
+      return data as SeasonStatEntry[];
+    },
+    enabled: !!seasonId,
+  });
+
+export const useCreateSeason = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (name: string) => {
+      // close any active season first
+      await db.from("seasons").update({ status: "closed" }).eq("status", "active");
+      const { data, error } = await db.from("seasons").insert({ name, status: "active" }).select().single();
+      if (error) throw error;
+      return data as Season;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["seasons"] });
+      qc.invalidateQueries({ queryKey: ["active_season"] });
+    },
+  });
+};
+
+export const useCloseSeason = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (seasonId: string) => {
+      const { error } = await db.from("seasons").update({ status: "closed" }).eq("id", seasonId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["seasons"] });
+      qc.invalidateQueries({ queryKey: ["active_season"] });
+    },
+  });
+};
+
+export const useAddSeasonStat = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ season_id, player_id, goals, assists }: { season_id: string; player_id: string; goals: number; assists: number }) => {
+      // 1. Add to season_stats
+      const { data, error } = await db.from("season_stats").insert({ season_id, player_id, goals, assists }).select().single();
+      if (error) throw error;
+
+      // 2. Also add to all-time player_stats
+      const { error: allTimeError } = await db.from("player_stats").insert({ player_id, goals, assists });
+      if (allTimeError) throw allTimeError;
+
+      return data as SeasonStatEntry;
+    },
+    onSuccess: (_, { season_id }) => {
+      qc.invalidateQueries({ queryKey: ["season_stats", season_id] });
+      qc.invalidateQueries({ queryKey: ["player_stats"] });
+      qc.invalidateQueries({ queryKey: ["players"] });
+    },
+  });
+};
+
+export const useDeleteSeasonStat = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, season_id }: { id: string; season_id: string }) => {
+      const { error } = await db.from("season_stats").delete().eq("id", id);
+      if (error) throw error;
+      return season_id;
+    },
+    onSuccess: (season_id) => {
+      qc.invalidateQueries({ queryKey: ["season_stats", season_id] });
+    },
+  });
+};
+
+export interface PlayerWithSeasonStats {
+  id: string;
+  name: string;
+  position: string;
+  jersey_number: number;
+  avatar_url: string | null;
+  goals_season: number;
+  assists_season: number;
+}
+
+export function mergeSeasonStats(players: Player[], stats: SeasonStatEntry[]): PlayerWithSeasonStats[] {
+  return players.map((p) => {
+    const entries = stats.filter((s) => s.player_id === p.id);
+    return {
+      id: p.id,
+      name: p.name,
+      position: p.position,
+      jersey_number: p.jersey_number,
+      avatar_url: p.avatar_url,
+      goals_season: entries.reduce((sum, s) => sum + s.goals, 0),
+      assists_season: entries.reduce((sum, s) => sum + s.assists, 0),
+    };
+  });
+}

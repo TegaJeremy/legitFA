@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,16 +14,13 @@ const AdminGuard: React.FC<AdminGuardProps> = ({ children, requireSuperAdmin = f
   const [loading, setLoading] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const location = useLocation();
 
   const checkUser = async () => {
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-
-      if (!user) {
-        setAuthenticated(false);
-        return;
-      }
+      if (!user) { setAuthenticated(false); return; }
 
       const { data: adminRecord } = await db
         .from("admin_users")
@@ -47,11 +44,9 @@ const AdminGuard: React.FC<AdminGuardProps> = ({ children, requireSuperAdmin = f
 
   useEffect(() => {
     checkUser();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       checkUser();
     });
-
     return () => subscription.unsubscribe();
   }, []);
 
@@ -63,7 +58,7 @@ const AdminGuard: React.FC<AdminGuardProps> = ({ children, requireSuperAdmin = f
     );
   }
 
-  if (!authenticated) return <Navigate to="/admin/login" replace />;
+  if (!authenticated) return <Navigate to="/admin/login" replace state={{ from: location }} />;
   if (requireSuperAdmin && !isSuperAdmin) return <Navigate to="/admin" replace />;
 
   return <>{children}</>;

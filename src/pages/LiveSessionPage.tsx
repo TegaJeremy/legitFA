@@ -3,7 +3,7 @@ import { Trophy, Play, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { supabase } from "@/integrations/supabase/client";
+import { useCurrentAdmin } from "@/hooks/use-auth";
 import {
   useActiveLiveSession,
   useLiveSessionTeams,
@@ -18,20 +18,6 @@ function formatTime(s: number) {
   const m = Math.floor(s / 60).toString().padStart(2, "0");
   const sec = (s % 60).toString().padStart(2, "0");
   return `${m}:${sec}`;
-}
-
-function useIsAdmin() {
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setIsAdmin(!!data.session);
-    });
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAdmin(!!session);
-    });
-    return () => listener.subscription.unsubscribe();
-  }, []);
-  return isAdmin;
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
@@ -172,7 +158,7 @@ const ActiveSession: React.FC<{ state: LiveSessionState }> = ({ state }) => {
   const { data: matches = [] } = useLiveSessionMatches(state.session_id);
   const recordResult = useRecordResult();
   const clearSession = useClearLiveSession();
-  const isAdmin = useIsAdmin();
+  const { isAdmin } = useCurrentAdmin();
   const [timeUpBanner, setTimeUpBanner] = useState(false);
 
   const { queue } = state;
@@ -196,7 +182,9 @@ const ActiveSession: React.FC<{ state: LiveSessionState }> = ({ state }) => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-heading font-bold text-foreground">Live Session</h1>
-          <p className="text-xs text-muted-foreground">{state.match_duration} min matches · {state.num_teams} teams</p>
+          <p className="text-xs text-muted-foreground">
+            {state.match_duration} min matches · {state.num_teams} teams
+          </p>
         </div>
         {isAdmin && (
           <Button

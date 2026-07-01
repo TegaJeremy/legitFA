@@ -5,34 +5,42 @@ import {
   useMatches, useAddMatch, useUpdateMatch, useDeleteMatch,
   useCreateTrainingSession, useClearTrainingSession, useTrainingTeams,
   usePlayersWithStats, useAddPlayerStat, useDeletePlayerStat,
+  useSeasons, useActiveSeason, useSeasonStats,
+  useCreateSeason, useCloseSeason, useAddSeasonStat, useDeleteSeasonStat,
+  mergeSeasonStats,
   type Player, type Match, type PlayerWithStats,
 } from "@/hooks/use-data";
+import {
+  useActiveLiveSession,
+  useLiveSessionTeams,
+  useLiveSessionMatches,
+  useClearLiveSession,
+} from "@/hooks/use-live-session";
 import type { Database } from "@/integrations/supabase/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import {
   Pencil, Trash2, Plus, Shuffle, User, Target, X,
-  Search, AlertCircle, LogOut, Loader2, Eraser, Users, Clock,
+  Search, AlertCircle, LogOut, Loader2, Eraser, Users, Clock, Trophy,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { formatDistanceToNow } from "date-fns";
 
-// ─── Shared form data types ───────────────────────────────────────────────────
 type PlayerFormData = Database["public"]["Tables"]["players"]["Insert"];
 type MatchFormData  = Database["public"]["Tables"]["matches"]["Insert"];
 type MatchFormState = MatchFormData & { venue?: string };
 
-// ─── Spinner ──────────────────────────────────────────────────────────────────
 const Spinner = ({ className = "h-4 w-4" }: { className?: string }) => (
   <Loader2 className={`animate-spin ${className}`} />
 );
 
-// ─── Jersey uniqueness ────────────────────────────────────────────────────────
 function useTakenJerseys(excludeId?: string) {
   const { data: players } = usePlayers();
   return useMemo(
@@ -308,13 +316,7 @@ const MatchForm: React.FC<{
         </div>
       </div>
       <div className="flex gap-2">
-        <Button
-          onClick={() => {
-            const { venue: _v, ...rest } = form;
-            onSave(rest);
-          }}
-          disabled={!!saving}
-        >
+        <Button onClick={() => { const { venue: _v, ...rest } = form; onSave(rest); }} disabled={!!saving}>
           {saving && <Spinner className="h-4 w-4 mr-2" />}
           {saving ? "Saving..." : match ? "Update Match" : "Add Match"}
         </Button>
@@ -337,9 +339,7 @@ const ShuffleTab: React.FC<{ players: Player[] | undefined }> = ({ players }) =>
       if (!acc[t.team_number]) acc[t.team_number] = [];
       acc[t.team_number].push(t.player_name);
       return acc;
-    }, {}),
-    [activeTeams],
-  );
+    }, {}), [activeTeams]);
 
   const teamNumbers = Object.keys(grouped).map(Number).sort((a, b) => a - b);
   const hasActiveSession = teamNumbers.length > 0;
@@ -364,11 +364,9 @@ const ShuffleTab: React.FC<{ players: Player[] | undefined }> = ({ players }) =>
   };
 
   const handleClear = async () => {
-    if (!confirm("Clear the current training session? The Training page will show nothing until the next shuffle.")) return;
-    try {
-      await clearSession.mutateAsync();
-      toast.success("Session cleared!");
-    } catch { toast.error("Failed to clear session"); }
+    if (!confirm("Clear the current training session?")) return;
+    try { await clearSession.mutateAsync(); toast.success("Session cleared!"); }
+    catch { toast.error("Failed to clear session"); }
   };
 
   return (
@@ -386,13 +384,8 @@ const ShuffleTab: React.FC<{ players: Player[] | undefined }> = ({ players }) =>
                 </span>
               )}
             </div>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="h-8 text-xs gap-1.5 flex-shrink-0"
-              onClick={handleClear}
-              disabled={clearSession.isPending}
-            >
+            <Button variant="destructive" size="sm" className="h-8 text-xs gap-1.5 flex-shrink-0"
+              onClick={handleClear} disabled={clearSession.isPending}>
               {clearSession.isPending ? <Spinner className="h-3 w-3" /> : <Eraser className="h-3 w-3" />}
               {clearSession.isPending ? "Clearing..." : "Clear Teams"}
             </Button>
@@ -416,7 +409,6 @@ const ShuffleTab: React.FC<{ players: Player[] | undefined }> = ({ players }) =>
           </div>
         </div>
       )}
-
       <div className="bg-card border border-border rounded-xl p-6 space-y-4">
         <div className="flex items-center gap-2">
           <Shuffle className="h-4 w-4 text-primary" />
@@ -432,13 +424,8 @@ const ShuffleTab: React.FC<{ players: Player[] | undefined }> = ({ players }) =>
         <div>
           <div className="flex items-center justify-between mb-2">
             <Label>Player Names (one per line)</Label>
-            <Button
-              variant="ghost" size="sm" className="text-xs h-7"
-              onClick={() => {
-                if (!players?.length) return;
-                setTrainingNames(players.map((p) => p.name).join("\n"));
-              }}
-            >
+            <Button variant="ghost" size="sm" className="text-xs h-7"
+              onClick={() => { if (!players?.length) return; setTrainingNames(players.map((p) => p.name).join("\n")); }}>
               Import from roster
             </Button>
           </div>
@@ -465,18 +452,333 @@ const ShuffleTab: React.FC<{ players: Player[] | undefined }> = ({ players }) =>
         </div>
         <div className="flex gap-2">
           <Button onClick={handleShuffle} disabled={createSession.isPending || clearSession.isPending}>
-            {createSession.isPending
-              ? <Spinner className="h-4 w-4 mr-1" />
-              : <Shuffle className="h-4 w-4 mr-1" />}
-            {createSession.isPending
-              ? "Shuffling..."
-              : hasActiveSession ? "Reshuffle" : "Shuffle Teams"}
+            {createSession.isPending ? <Spinner className="h-4 w-4 mr-1" /> : <Shuffle className="h-4 w-4 mr-1" />}
+            {createSession.isPending ? "Shuffling..." : hasActiveSession ? "Reshuffle" : "Shuffle Teams"}
           </Button>
           <Button variant="outline" onClick={() => setTrainingNames("")} disabled={createSession.isPending}>
             Clear Input
           </Button>
         </div>
       </div>
+    </div>
+  );
+};
+
+// ─── Live Session Tab ─────────────────────────────────────────────────────────
+const LiveSessionTab: React.FC = () => {
+  const { data: session, isLoading } = useActiveLiveSession();
+  const { data: teams = [] } = useLiveSessionTeams(session?.session_id);
+  const { data: matches = [] } = useLiveSessionMatches(session?.session_id);
+  const clearSession = useClearLiveSession();
+
+  const handleClear = async () => {
+    if (!confirm("End the live session? The standings and match history will be cleared.")) return;
+    try { await clearSession.mutateAsync(); toast.success("Live session cleared!"); }
+    catch { toast.error("Failed to clear session"); }
+  };
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center py-12 text-muted-foreground"><Spinner className="h-5 w-5 mr-2" /> Loading…</div>;
+  }
+
+  if (!session) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 gap-3 text-center">
+        <Trophy className="h-10 w-10 text-muted-foreground" />
+        <p className="text-muted-foreground text-sm">No active live session right now.</p>
+        <p className="text-xs text-muted-foreground">Sessions are started from the Live Session page.</p>
+      </div>
+    );
+  }
+
+  const sortedTeams = [...teams].sort((a, b) => b.points - a.points || b.gf - a.gf || a.ga - b.ga);
+  const teamA = session.queue[0];
+  const teamB = session.queue[1];
+
+  return (
+    <div className="space-y-5">
+      <div className="bg-card border border-border rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 bg-muted/30 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-4 w-4 text-primary flex-shrink-0" />
+            <span className="font-semibold text-sm text-foreground">Active Live Session</span>
+            <span className="text-xs text-muted-foreground hidden sm:flex items-center gap-1">
+              <Clock className="h-3 w-3" />
+              expires {formatDistanceToNow(new Date(session.expires_at), { addSuffix: true })}
+            </span>
+          </div>
+          <Button variant="destructive" size="sm" className="h-8 text-xs gap-1.5 flex-shrink-0"
+            onClick={handleClear} disabled={clearSession.isPending}>
+            {clearSession.isPending ? <Spinner className="h-3 w-3" /> : <Eraser className="h-3 w-3" />}
+            {clearSession.isPending ? "Clearing..." : "End Session"}
+          </Button>
+        </div>
+        <div className="px-5 py-3 flex flex-wrap gap-4 text-sm text-muted-foreground border-b border-border">
+          <span>{session.num_teams} teams</span>
+          <span>{session.match_duration} min matches</span>
+          <span>{matches.length} matches played</span>
+        </div>
+        <div className="px-5 py-3 border-b border-border">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Now Playing</p>
+          <div className="flex items-center gap-3">
+            <Badge>Team {teamA} 🟢</Badge>
+            <span className="text-muted-foreground text-xs">vs</span>
+            <Badge variant="outline">Team {teamB} 🔵</Badge>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/40 text-muted-foreground text-xs uppercase tracking-wide">
+                <th className="text-left px-4 py-2">#</th>
+                <th className="text-left px-4 py-2">Team</th>
+                <th className="text-center px-2 py-2">P</th>
+                <th className="text-center px-2 py-2">W</th>
+                <th className="text-center px-2 py-2">D</th>
+                <th className="text-center px-2 py-2">L</th>
+                <th className="text-center px-2 py-2">GF</th>
+                <th className="text-center px-2 py-2">GA</th>
+                <th className="text-center px-2 py-2">GD</th>
+                <th className="text-center px-2 py-2 font-bold text-foreground">Pts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedTeams.map((team, idx) => {
+                const playing = team.team_number === teamA || team.team_number === teamB;
+                return (
+                  <tr key={team.id} className={`border-b border-border last:border-0 ${playing ? "bg-primary/5" : ""}`}>
+                    <td className="px-4 py-2.5 text-muted-foreground">{idx + 1}</td>
+                    <td className="px-4 py-2.5 font-medium text-foreground">
+                      Team {team.team_number}
+                      {playing && <span className="ml-1.5 text-primary text-xs">●</span>}
+                    </td>
+                    <td className="text-center px-2 py-2.5">{team.played}</td>
+                    <td className="text-center px-2 py-2.5">{team.won}</td>
+                    <td className="text-center px-2 py-2.5">{team.drawn}</td>
+                    <td className="text-center px-2 py-2.5">{team.lost}</td>
+                    <td className="text-center px-2 py-2.5">{team.gf}</td>
+                    <td className="text-center px-2 py-2.5">{team.ga}</td>
+                    <td className="text-center px-2 py-2.5">{team.gf - team.ga}</td>
+                    <td className="text-center px-2 py-2.5 font-bold text-foreground">{team.points}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── Seasons Tab ──────────────────────────────────────────────────────────────
+const SeasonsTab: React.FC<{ players: Player[] | undefined }> = ({ players }) => {
+  const { data: seasons = [], isLoading } = useSeasons();
+  const { data: activeSeason } = useActiveSeason();
+  const [selectedSeasonId, setSelectedSeasonId] = useState<string | undefined>(undefined);
+  const [newSeasonName, setNewSeasonName] = useState("");
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [statPlayerId, setStatPlayerId] = useState<string | null>(null);
+  const [goals, setGoals] = useState(0);
+  const [assists, setAssists] = useState(0);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const createSeason = useCreateSeason();
+  const closeSeason = useCloseSeason();
+  const addSeasonStat = useAddSeasonStat();
+  const deleteSeasonStat = useDeleteSeasonStat();
+
+  const viewingSeasonId = selectedSeasonId ?? activeSeason?.id;
+  const viewingSeason = seasons.find((s) => s.id === viewingSeasonId);
+  const { data: seasonStats = [] } = useSeasonStats(viewingSeasonId);
+  const seasonPlayers = players && seasonStats ? mergeSeasonStats(players, seasonStats) : [];
+  const playerSeasonEntries = seasonStats.filter((s) => s.player_id === statPlayerId);
+
+  const handleCreateSeason = async () => {
+    if (!newSeasonName.trim()) { toast.error("Season name is required"); return; }
+    try {
+      await createSeason.mutateAsync(newSeasonName.trim());
+      toast.success("Season created!");
+      setNewSeasonName("");
+      setShowCreateForm(false);
+    } catch { toast.error("Failed to create season"); }
+  };
+
+  const handleCloseSeason = async () => {
+    if (!viewingSeasonId) return;
+    if (!confirm(`Close "${viewingSeason?.name}"? No more stats can be added to it.`)) return;
+    try { await closeSeason.mutateAsync(viewingSeasonId); toast.success("Season closed!"); }
+    catch { toast.error("Failed to close season"); }
+  };
+
+  const handleAddStat = async () => {
+    if (!statPlayerId || !viewingSeasonId) return;
+    if (goals === 0 && assists === 0) { toast.error("Enter at least 1 goal or assist"); return; }
+    try {
+      await addSeasonStat.mutateAsync({ season_id: viewingSeasonId, player_id: statPlayerId, goals, assists });
+      toast.success("Stats logged! All-time record updated too.");
+      setGoals(0); setAssists(0);
+    } catch { toast.error("Failed to log stats"); }
+  };
+
+  const handleDeleteStat = async (id: string) => {
+    if (!viewingSeasonId) return;
+    setDeletingId(id);
+    try { await deleteSeasonStat.mutateAsync({ id, season_id: viewingSeasonId }); }
+    catch { toast.error("Failed to delete"); }
+    finally { setDeletingId(null); }
+  };
+
+  return (
+    <div className="space-y-5">
+
+      {/* Season selector + actions */}
+      <div className="flex flex-wrap items-center gap-3">
+        {seasons.length > 0 && (
+          <Select value={viewingSeasonId ?? ""} onValueChange={setSelectedSeasonId}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Select season" />
+            </SelectTrigger>
+            <SelectContent>
+              {seasons.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name} {s.status === "active" ? "🟢" : "🔒"}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        {viewingSeason?.status === "active" && (
+          <Button variant="outline" size="sm" onClick={handleCloseSeason} disabled={closeSeason.isPending}>
+            {closeSeason.isPending ? <Spinner className="h-3 w-3 mr-1" /> : null}
+            Close Season
+          </Button>
+        )}
+        {!showCreateForm && (
+          <Button size="sm" onClick={() => setShowCreateForm(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            {activeSeason ? "New Season" : "Create First Season"}
+          </Button>
+        )}
+      </div>
+
+      {/* Create season form */}
+      {showCreateForm && (
+        <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          <p className="text-sm font-semibold text-foreground">New Season</p>
+          {activeSeason && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+              Creating a new season will automatically close "{activeSeason.name}"
+            </p>
+          )}
+          <div className="flex gap-2">
+            <Input
+              placeholder="e.g. Season 1, Summer 2025..."
+              value={newSeasonName}
+              onChange={(e) => setNewSeasonName(e.target.value)}
+            />
+            <Button onClick={handleCreateSeason} disabled={createSeason.isPending}>
+              {createSeason.isPending ? <Spinner className="h-4 w-4 mr-1" /> : null}
+              Create
+            </Button>
+            <Button variant="outline" onClick={() => setShowCreateForm(false)}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-xl" />)}</div>
+      ) : seasons.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <Trophy className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p>No seasons yet. Create the first one above.</p>
+        </div>
+      ) : !viewingSeasonId ? null : (
+        <div className="space-y-4">
+
+          {/* Stat entry — only for active season */}
+          {viewingSeason?.status === "active" && (
+            <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+              <p className="text-sm font-semibold text-foreground">Log Stats for {viewingSeason.name}</p>
+              <div className="flex flex-wrap gap-2">
+                {players?.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setStatPlayerId(statPlayerId === p.id ? null : p.id)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                      statPlayerId === p.id
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-muted text-foreground border-border hover:border-primary"
+                    }`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+
+              {statPlayerId && (
+                <div className="border border-border rounded-lg p-3 space-y-3">
+                  <p className="text-xs font-semibold text-foreground">
+                    {players?.find((p) => p.id === statPlayerId)?.name}
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><Label className="text-xs">Goals</Label><Input type="number" min={0} value={goals} onChange={(e) => setGoals(Math.max(0, +e.target.value))} /></div>
+                    <div><Label className="text-xs">Assists</Label><Input type="number" min={0} value={assists} onChange={(e) => setAssists(Math.max(0, +e.target.value))} /></div>
+                  </div>
+                  <Button size="sm" onClick={handleAddStat} disabled={addSeasonStat.isPending}>
+                    {addSeasonStat.isPending ? <Spinner className="h-3 w-3 mr-1" /> : <Target className="h-3 w-3 mr-1" />}
+                    Save — also updates all-time record
+                  </Button>
+
+                  {playerSeasonEntries.length > 0 && (
+                    <div className="space-y-1 pt-1">
+                      <p className="text-xs text-muted-foreground font-semibold">Entries this season:</p>
+                      {playerSeasonEntries.map((entry) => (
+                        <div key={entry.id} className="flex items-center justify-between bg-muted/50 rounded-md px-3 py-1.5 text-xs">
+                          <span className="text-muted-foreground">
+                            {new Date(entry.recorded_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short" })}
+                          </span>
+                          <span className="font-medium">{entry.goals}G · {entry.assists}A</span>
+                          <Button variant="ghost" size="icon" className="h-6 w-6" disabled={deletingId === entry.id}
+                            onClick={() => handleDeleteStat(entry.id)}>
+                            {deletingId === entry.id ? <Spinner className="h-3 w-3" /> : <Trash2 className="h-3 w-3 text-destructive" />}
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Season standings */}
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted text-muted-foreground text-left border-b border-border">
+                  <th className="px-4 py-3">#</th>
+                  <th className="px-4 py-3">Player</th>
+                  <th className="px-4 py-3 text-center">Goals</th>
+                  <th className="px-4 py-3 text-center">Assists</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...seasonPlayers]
+                  .sort((a, b) => b.goals_season - a.goals_season || b.assists_season - a.assists_season)
+                  .map((p, i) => (
+                    <tr key={p.id} className={`border-t border-border ${i % 2 === 0 ? "bg-card" : "bg-muted/20"}`}>
+                      <td className="px-4 py-3 text-muted-foreground">{i + 1}</td>
+                      <td className="px-4 py-3 font-medium text-foreground">{p.name}</td>
+                      <td className="px-4 py-3 text-center font-bold text-primary">{p.goals_season}</td>
+                      <td className="px-4 py-3 text-center font-bold text-primary">{p.assists_season}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -587,11 +889,13 @@ const AdminPage: React.FC = () => {
       </div>
 
       <Tabs defaultValue="players" className="max-w-4xl mx-auto">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="players">Players</TabsTrigger>
           <TabsTrigger value="matches">Matches</TabsTrigger>
           <TabsTrigger value="stats">Stats</TabsTrigger>
           <TabsTrigger value="training">Shuffle</TabsTrigger>
+          <TabsTrigger value="live">Live</TabsTrigger>
+          <TabsTrigger value="seasons">Seasons</TabsTrigger>
         </TabsList>
 
         {/* ── Players ── */}
@@ -739,6 +1043,16 @@ const AdminPage: React.FC = () => {
         {/* ── Shuffle ── */}
         <TabsContent value="training" className="mt-6">
           <ShuffleTab players={players} />
+        </TabsContent>
+
+        {/* ── Live Session ── */}
+        <TabsContent value="live" className="mt-6">
+          <LiveSessionTab />
+        </TabsContent>
+
+        {/* ── Seasons ── */}
+        <TabsContent value="seasons" className="mt-6">
+          <SeasonsTab players={players} />
         </TabsContent>
       </Tabs>
     </div>
